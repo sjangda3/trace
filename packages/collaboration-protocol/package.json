@@ -1,0 +1,36 @@
+{
+  "name": "@trace/collaboration-protocol",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Transport-neutral wire contracts and bounded validators for Trace collaboration.",
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./schemas/wire-message.json": "./dist/schemas/wire-message.schema.json",
+    "./schemas/*": "./dist/schemas/*"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "test": "vitest run --config vitest.config.ts"
+  },
+  "dependencies": {
+    "ajv": "^8.20.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  },
+  "engines": {
+    "node": ">=20.10.0"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trace.dev/schemas/recovery-draft-v1.json",
+  "oneOf": [
+    { "$ref": "https://trace.dev/schemas/collaboration-protocol-v1.json#/$defs/recoveryDraft" },
+    { "$ref": "https://trace.dev/schemas/collaboration-protocol-v1.json#/$defs/recoveryDraftPutMutation" },
+    { "$ref": "https://trace.dev/schemas/collaboration-protocol-v1.json#/$defs/recoveryDraftDeleteMutation" },
+    { "$ref": "https://trace.dev/schemas/collaboration-protocol-v1.json#/$defs/recoveryDraftAck" },
+    { "$ref": "https://trace.dev/schemas/collaboration-protocol-v1.json#/$defs/recoveryDraftChangedEvent" }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trace.dev/schemas/terminal-v1.json",
+  "oneOf": [
+    { "$ref": "https://trace.dev/schemas/collaboration-protocol-v1.json#/$defs/terminalControlCommand" },
+    { "$ref": "https://trace.dev/schemas/collaboration-protocol-v1.json#/$defs/terminalInputCommand" },
+    { "$ref": "https://trace.dev/schemas/collaboration-protocol-v1.json#/$defs/terminalControlAck" },
+    { "$ref": "https://trace.dev/schemas/collaboration-protocol-v1.json#/$defs/terminalInputRejectedEvent" }
+  ]
+}

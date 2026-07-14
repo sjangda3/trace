@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trace.dev/schemas/envelopes-v1.json",
+  "oneOf": [
+    { "$ref": "https://trace.dev/schemas/collaboration-protocol-v1.json#/$defs/commandEnvelope" },
+    { "$ref": "https://trace.dev/schemas/collaboration-protocol-v1.json#/$defs/durableEventEnvelope" },
+    { "$ref": "https://trace.dev/schemas/collaboration-protocol-v1.json#/$defs/ephemeralEventEnvelope" },
+    { "$ref": "https://trace.dev/schemas/collaboration-protocol-v1.json#/$defs/snapshotEnvelope" }
+  ]
+}

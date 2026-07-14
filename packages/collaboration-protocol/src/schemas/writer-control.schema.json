@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trace.dev/schemas/writer-control-v1.json",
+  "oneOf": [
+    { "$ref": "https://trace.dev/schemas/collaboration-protocol-v1.json#/$defs/writerControlState" },
+    { "$ref": "https://trace.dev/schemas/collaboration-protocol-v1.json#/$defs/writerControlCasCommand" },
+    { "$ref": "https://trace.dev/schemas/collaboration-protocol-v1.json#/$defs/writerControlAck" },
+    { "$ref": "https://trace.dev/schemas/collaboration-protocol-v1.json#/$defs/writerControlChangedEvent" },
+    { "$ref": "https://trace.dev/schemas/collaboration-protocol-v1.json#/$defs/writerFenceAdvancedEvent" }
+  ]
+}

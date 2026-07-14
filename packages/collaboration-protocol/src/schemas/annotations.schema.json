@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trace.dev/schemas/annotations-v1.json",
+  "oneOf": [
+    { "$ref": "https://trace.dev/schemas/collaboration-protocol-v1.json#/$defs/annotation" },
+    { "$ref": "https://trace.dev/schemas/collaboration-protocol-v1.json#/$defs/annotationMutation" },
+    { "$ref": "https://trace.dev/schemas/collaboration-protocol-v1.json#/$defs/annotationMutationAck" },
+    { "$ref": "https://trace.dev/schemas/collaboration-protocol-v1.json#/$defs/annotationChangedEvent" }
+  ]
+}

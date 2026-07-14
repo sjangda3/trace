@@ -1,0 +1,34 @@
+{
+  "name": "@trace/control-plane",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Provider-neutral Trace workspace, invite, membership, and room snapshot API.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    }
+  },
+  "engines": {
+    "node": ">=20.10.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test dist/test/app.node.js dist/test/in-memory-repository.node.js dist/test/invite-token.node.js dist/test/protocol-adapter.node.js",
+    "test:postgres": "npm run build && node --test dist/test/postgres-repository.integration.node.js",
+    "start": "node dist/src/server.js",
+    "migrate": "node dist/src/migrate.js"
+  },
+  "dependencies": {
+    "@trace/collaboration-protocol": "file:../../packages/collaboration-protocol",
+    "fastify": "^5.10.0",
+    "pg": "^8.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@types/pg": "^8.20.0",
+    "typescript": "^7.0.2"
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trace.dev/schemas/room-snapshot-v1.json",
+  "$ref": "https://trace.dev/schemas/collaboration-protocol-v1.json#/$defs/roomSnapshot"
+}

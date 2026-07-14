@@ -1,0 +1,935 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trace.dev/schemas/collaboration-protocol-v1.json",
+  "title": "Trace collaboration protocol v1",
+  "oneOf": [
+    { "$ref": "#/$defs/protocolClientHello" },
+    { "$ref": "#/$defs/protocolServerAccept" },
+    { "$ref": "#/$defs/protocolServerReject" },
+    { "$ref": "#/$defs/replayRequest" },
+    { "$ref": "#/$defs/commandEnvelope" },
+    { "$ref": "#/$defs/durableEventEnvelope" },
+    { "$ref": "#/$defs/ephemeralEventEnvelope" },
+    { "$ref": "#/$defs/snapshotEnvelope" }
+  ],
+  "$defs": {
+    "protocolVersion": { "const": "1.0" },
+    "versionString": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 32,
+      "pattern": "^[0-9]+\\.[0-9]+(?:\\.[0-9]+)?(?:-[A-Za-z0-9.-]+)?$"
+    },
+    "opaqueId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@/-]*$"
+    },
+    "mutationId": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "fence": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+    "replayCursor": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "pattern": "^[A-Za-z0-9._~:@/+=-]+$"
+    },
+    "isoTimestamp": {
+      "type": "string",
+      "minLength": 24,
+      "maxLength": 24,
+      "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]\\.[0-9]{3}Z$"
+    },
+    "gitOid": {
+      "type": "string",
+      "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+    },
+    "nullableGitOid": {
+      "oneOf": [{ "$ref": "#/$defs/gitOid" }, { "type": "null" }]
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "nullableSha256": {
+      "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }]
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "pattern": "^(?!/)(?!.*\\\\)(?!\\.\\.?$)(?!\\.\\.?/)(?!.*\/\\.\\.?(?:/|$)).+$"
+    },
+    "displayName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "context": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 16384
+    },
+    "replyContext": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "codeRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["startLine", "startColumn", "endLine", "endColumn"],
+      "properties": {
+        "startLine": { "type": "integer", "minimum": 1, "maximum": 10000000 },
+        "startColumn": { "type": "integer", "minimum": 1, "maximum": 1000000 },
+        "endLine": { "type": "integer", "minimum": 1, "maximum": 10000000 },
+        "endColumn": { "type": "integer", "minimum": 1, "maximum": 1000000 }
+      }
+    },
+    "githubLink": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "owner", "repository", "number", "commentId", "reviewThreadId"],
+      "properties": {
+        "kind": { "enum": ["issue", "pull_request"] },
+        "owner": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 39,
+          "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$"
+        },
+        "repository": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^(?!\\.)(?!.*\\.git$)[A-Za-z0-9._-]+$"
+        },
+        "number": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+        "commentId": {
+          "oneOf": [
+            { "type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[A-Za-z0-9_:\\-=+/]+$" },
+            { "type": "null" }
+          ]
+        },
+        "reviewThreadId": {
+          "oneOf": [
+            { "type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[A-Za-z0-9_:\\-=+/]+$" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "nullableGithubLink": {
+      "oneOf": [{ "$ref": "#/$defs/githubLink" }, { "type": "null" }]
+    },
+    "annotationReply": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "context", "authorMemberId", "authorDisplayName", "createdAt"],
+      "properties": {
+        "id": { "$ref": "#/$defs/opaqueId" },
+        "context": { "$ref": "#/$defs/replyContext" },
+        "authorMemberId": { "$ref": "#/$defs/opaqueId" },
+        "authorDisplayName": { "$ref": "#/$defs/displayName" },
+        "createdAt": { "$ref": "#/$defs/isoTimestamp" }
+      }
+    },
+    "annotation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id", "filePath", "context", "range", "authorMemberId", "authorDisplayName",
+        "createdAt", "updatedAt", "updatedByMemberId", "resolved", "resolvedAt",
+        "resolvedByMemberId", "githubLink", "anchorRevision", "anchorContentHash", "replies", "revision"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/opaqueId" },
+        "filePath": { "$ref": "#/$defs/relativePath" },
+        "context": { "$ref": "#/$defs/context" },
+        "range": { "$ref": "#/$defs/codeRange" },
+        "authorMemberId": { "$ref": "#/$defs/opaqueId" },
+        "authorDisplayName": { "$ref": "#/$defs/displayName" },
+        "createdAt": { "$ref": "#/$defs/isoTimestamp" },
+        "updatedAt": { "$ref": "#/$defs/isoTimestamp" },
+        "updatedByMemberId": { "$ref": "#/$defs/opaqueId" },
+        "resolved": { "type": "boolean" },
+        "resolvedAt": { "oneOf": [{ "$ref": "#/$defs/isoTimestamp" }, { "type": "null" }] },
+        "resolvedByMemberId": { "oneOf": [{ "$ref": "#/$defs/opaqueId" }, { "type": "null" }] },
+        "githubLink": { "$ref": "#/$defs/nullableGithubLink" },
+        "anchorRevision": { "$ref": "#/$defs/nullableGitOid" },
+        "anchorContentHash": { "$ref": "#/$defs/nullableSha256" },
+        "replies": {
+          "type": "array",
+          "maxItems": 64,
+          "items": { "$ref": "#/$defs/annotationReply" }
+        },
+        "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 }
+      }
+    },
+    "annotationTombstone": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "filePath", "githubLink", "anchorRevision", "anchorContentHash", "deletedAt", "deletedByMemberId", "revision"],
+      "properties": {
+        "id": { "$ref": "#/$defs/opaqueId" },
+        "filePath": { "$ref": "#/$defs/relativePath" },
+        "githubLink": { "$ref": "#/$defs/nullableGithubLink" },
+        "anchorRevision": { "$ref": "#/$defs/nullableGitOid" },
+        "anchorContentHash": { "$ref": "#/$defs/nullableSha256" },
+        "deletedAt": { "$ref": "#/$defs/isoTimestamp" },
+        "deletedByMemberId": { "$ref": "#/$defs/opaqueId" },
+        "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 }
+      }
+    },
+    "repositoryRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "owner", "name", "defaultBranch"],
+      "properties": {
+        "provider": { "const": "github" },
+        "owner": { "type": "string", "minLength": 1, "maxLength": 39, "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 100, "pattern": "^(?!\\.)(?!.*\\.git$)[A-Za-z0-9._-]+$" },
+        "defaultBranch": { "type": "string", "minLength": 1, "maxLength": 255, "pattern": "^(?!/)(?!.*\\.\\.)(?!.*[~^:?*\\[\\]\\\\])[ -~]+$" }
+      }
+    },
+    "roomMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["memberId", "displayName", "role", "joinedAt"],
+      "properties": {
+        "memberId": { "$ref": "#/$defs/opaqueId" },
+        "displayName": { "$ref": "#/$defs/displayName" },
+        "role": { "enum": ["owner", "maintainer", "member", "guest"] },
+        "joinedAt": { "$ref": "#/$defs/isoTimestamp" }
+      }
+    },
+    "presenceState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["memberId", "clientId", "status", "activePath", "cursor", "typing", "lastSeenAt"],
+      "properties": {
+        "memberId": { "$ref": "#/$defs/opaqueId" },
+        "clientId": { "$ref": "#/$defs/opaqueId" },
+        "status": { "enum": ["active", "idle", "offline"] },
+        "activePath": { "oneOf": [{ "$ref": "#/$defs/relativePath" }, { "type": "null" }] },
+        "cursor": { "oneOf": [{ "$ref": "#/$defs/codeRange" }, { "type": "null" }] },
+        "typing": { "type": "boolean" },
+        "lastSeenAt": { "$ref": "#/$defs/isoTimestamp" }
+      }
+    },
+    "editorResource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "filePath"],
+      "properties": {
+        "kind": { "const": "editor" },
+        "filePath": { "$ref": "#/$defs/relativePath" }
+      }
+    },
+    "workspaceResource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "channel"],
+      "properties": {
+        "kind": { "const": "workspace" },
+        "channel": { "const": "editor" }
+      }
+    },
+    "terminalResource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "sessionId"],
+      "properties": {
+        "kind": { "const": "terminal" },
+        "sessionId": { "$ref": "#/$defs/opaqueId" }
+      }
+    },
+    "writerResource": {
+      "oneOf": [
+        { "$ref": "#/$defs/workspaceResource" },
+        { "$ref": "#/$defs/editorResource" },
+        { "$ref": "#/$defs/terminalResource" }
+      ]
+    },
+    "writerControlState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["resource", "version", "fence", "ownerMemberId", "ownerClientId", "leaseExpiresAt", "typingCount", "typingUntil"],
+      "properties": {
+        "resource": { "$ref": "#/$defs/writerResource" },
+        "version": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "fence": { "$ref": "#/$defs/fence" },
+        "ownerMemberId": { "oneOf": [{ "$ref": "#/$defs/opaqueId" }, { "type": "null" }] },
+        "ownerClientId": { "oneOf": [{ "$ref": "#/$defs/opaqueId" }, { "type": "null" }] },
+        "leaseExpiresAt": { "oneOf": [{ "$ref": "#/$defs/isoTimestamp" }, { "type": "null" }] },
+        "typingCount": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "typingUntil": { "oneOf": [{ "$ref": "#/$defs/isoTimestamp" }, { "type": "null" }] }
+      }
+    },
+    "recoveryDraftSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["draftId", "filePath", "baseRevision", "contentSha256", "sizeBytes", "authorMemberId", "createdAt", "updatedAt"],
+      "properties": {
+        "draftId": { "$ref": "#/$defs/opaqueId" },
+        "filePath": { "$ref": "#/$defs/relativePath" },
+        "baseRevision": { "$ref": "#/$defs/nullableGitOid" },
+        "contentSha256": { "$ref": "#/$defs/sha256" },
+        "sizeBytes": { "type": "integer", "minimum": 0, "maximum": 1048576 },
+        "authorMemberId": { "$ref": "#/$defs/opaqueId" },
+        "createdAt": { "$ref": "#/$defs/isoTimestamp" },
+        "updatedAt": { "$ref": "#/$defs/isoTimestamp" }
+      }
+    },
+    "recoveryDraft": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["draftId", "filePath", "baseRevision", "contentSha256", "sizeBytes", "authorMemberId", "createdAt", "updatedAt", "encoding", "content"],
+      "properties": {
+        "draftId": { "$ref": "#/$defs/opaqueId" },
+        "filePath": { "$ref": "#/$defs/relativePath" },
+        "baseRevision": { "$ref": "#/$defs/nullableGitOid" },
+        "contentSha256": { "$ref": "#/$defs/sha256" },
+        "sizeBytes": { "type": "integer", "minimum": 0, "maximum": 1048576 },
+        "authorMemberId": { "$ref": "#/$defs/opaqueId" },
+        "createdAt": { "$ref": "#/$defs/isoTimestamp" },
+        "updatedAt": { "$ref": "#/$defs/isoTimestamp" },
+        "encoding": { "const": "utf8" },
+        "content": { "type": "string", "maxLength": 1048576 }
+      }
+    },
+    "recoveryDraftInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["draftId", "filePath", "baseRevision", "contentSha256", "sizeBytes", "createdAt", "updatedAt", "encoding", "content"],
+      "properties": {
+        "draftId": { "$ref": "#/$defs/opaqueId" },
+        "filePath": { "$ref": "#/$defs/relativePath" },
+        "baseRevision": { "$ref": "#/$defs/nullableGitOid" },
+        "contentSha256": { "$ref": "#/$defs/sha256" },
+        "sizeBytes": { "type": "integer", "minimum": 0, "maximum": 1048576 },
+        "createdAt": { "$ref": "#/$defs/isoTimestamp" },
+        "updatedAt": { "$ref": "#/$defs/isoTimestamp" },
+        "encoding": { "const": "utf8" },
+        "content": { "type": "string", "maxLength": 1048576 }
+      }
+    },
+    "roomSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["roomId", "snapshotVersion", "generatedAt", "repository", "members", "presence", "annotations", "writerControls", "recoveryDrafts"],
+      "properties": {
+        "roomId": { "$ref": "#/$defs/opaqueId" },
+        "snapshotVersion": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "generatedAt": { "$ref": "#/$defs/isoTimestamp" },
+        "repository": { "$ref": "#/$defs/repositoryRef" },
+        "members": { "type": "array", "minItems": 1, "maxItems": 100, "items": { "$ref": "#/$defs/roomMember" } },
+        "presence": { "type": "array", "maxItems": 200, "items": { "$ref": "#/$defs/presenceState" } },
+        "annotations": { "type": "array", "maxItems": 1000, "items": { "$ref": "#/$defs/annotation" } },
+        "writerControls": { "type": "array", "maxItems": 256, "items": { "$ref": "#/$defs/writerControlState" } },
+        "recoveryDrafts": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/recoveryDraftSummary" } }
+      }
+    },
+    "protocolClientHello": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "supportedVersions", "clientInstanceId", "appVersion", "platform", "resume"],
+      "properties": {
+        "kind": { "const": "protocol.hello" },
+        "supportedVersions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/versionString" }
+        },
+        "clientInstanceId": { "$ref": "#/$defs/opaqueId" },
+        "appVersion": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$" },
+        "platform": { "enum": ["macos", "windows", "linux"] },
+        "resume": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["roomId", "cursor"],
+              "properties": {
+                "roomId": { "$ref": "#/$defs/opaqueId" },
+                "cursor": { "$ref": "#/$defs/replayCursor" }
+              }
+            },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "protocolServerAccept": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "version", "connectionId", "serverTime", "heartbeatMs", "maxFrameBytes", "resumeStatus"],
+      "properties": {
+        "kind": { "const": "protocol.accept" },
+        "version": { "$ref": "#/$defs/protocolVersion" },
+        "connectionId": { "$ref": "#/$defs/opaqueId" },
+        "serverTime": { "$ref": "#/$defs/isoTimestamp" },
+        "heartbeatMs": { "type": "integer", "minimum": 5000, "maximum": 120000 },
+        "maxFrameBytes": { "type": "integer", "minimum": 65536, "maximum": 1500000 },
+        "resumeStatus": { "enum": ["not_requested", "accepted", "snapshot_required"] }
+      }
+    },
+    "protocolServerReject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "code", "message", "supportedVersions", "retryAfterMs"],
+      "properties": {
+        "kind": { "const": "protocol.reject" },
+        "code": { "enum": ["VERSION_UNSUPPORTED", "AUTH_REQUIRED", "ROOM_UNAVAILABLE", "RATE_LIMITED"] },
+        "message": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "supportedVersions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/versionString" }
+        },
+        "retryAfterMs": {
+          "oneOf": [
+            { "type": "integer", "minimum": 1000, "maximum": 3600000 },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "replayRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "protocolVersion", "roomId", "afterCursor", "limit"],
+      "properties": {
+        "kind": { "const": "replay.request" },
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "roomId": { "$ref": "#/$defs/opaqueId" },
+        "afterCursor": { "$ref": "#/$defs/replayCursor" },
+        "limit": { "type": "integer", "minimum": 1, "maximum": 500 }
+      }
+    },
+    "presencePublishCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "delivery", "queuePolicy", "status", "activePath", "cursor", "typing"],
+      "properties": {
+        "type": { "const": "presence.publish" },
+        "delivery": { "const": "ephemeral" },
+        "queuePolicy": { "const": "never" },
+        "status": { "enum": ["active", "idle"] },
+        "activePath": { "oneOf": [{ "$ref": "#/$defs/relativePath" }, { "type": "null" }] },
+        "cursor": { "oneOf": [{ "$ref": "#/$defs/codeRange" }, { "type": "null" }] },
+        "typing": { "type": "boolean" }
+      }
+    },
+    "annotationCreateMutation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "delivery", "queuePolicy", "mutationId", "annotationId", "filePath", "context", "range", "githubLink", "anchorRevision", "anchorContentHash", "createdAt"],
+      "properties": {
+        "type": { "const": "annotation.create" },
+        "delivery": { "const": "durable" },
+        "queuePolicy": { "const": "offline_allowed" },
+        "mutationId": { "$ref": "#/$defs/mutationId" },
+        "annotationId": { "$ref": "#/$defs/opaqueId" },
+        "filePath": { "$ref": "#/$defs/relativePath" },
+        "context": { "$ref": "#/$defs/context" },
+        "range": { "$ref": "#/$defs/codeRange" },
+        "githubLink": { "$ref": "#/$defs/nullableGithubLink" },
+        "anchorRevision": { "$ref": "#/$defs/nullableGitOid" },
+        "anchorContentHash": { "$ref": "#/$defs/nullableSha256" },
+        "createdAt": { "$ref": "#/$defs/isoTimestamp" }
+      }
+    },
+    "annotationUpdatePatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "context": { "$ref": "#/$defs/context" },
+        "range": { "$ref": "#/$defs/codeRange" },
+        "githubLink": { "$ref": "#/$defs/nullableGithubLink" },
+        "anchorRevision": { "$ref": "#/$defs/nullableGitOid" },
+        "anchorContentHash": { "$ref": "#/$defs/nullableSha256" }
+      }
+    },
+    "annotationUpdateMutation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "delivery", "queuePolicy", "mutationId", "annotationId", "expectedRevision", "patch"],
+      "properties": {
+        "type": { "const": "annotation.update" },
+        "delivery": { "const": "durable" },
+        "queuePolicy": { "const": "offline_allowed" },
+        "mutationId": { "$ref": "#/$defs/mutationId" },
+        "annotationId": { "$ref": "#/$defs/opaqueId" },
+        "expectedRevision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "patch": { "$ref": "#/$defs/annotationUpdatePatch" }
+      }
+    },
+    "annotationReplyMutation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "delivery", "queuePolicy", "mutationId", "annotationId", "expectedRevision", "replyId", "context", "createdAt"],
+      "properties": {
+        "type": { "const": "annotation.reply" },
+        "delivery": { "const": "durable" },
+        "queuePolicy": { "const": "offline_allowed" },
+        "mutationId": { "$ref": "#/$defs/mutationId" },
+        "annotationId": { "$ref": "#/$defs/opaqueId" },
+        "expectedRevision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "replyId": { "$ref": "#/$defs/opaqueId" },
+        "context": { "$ref": "#/$defs/replyContext" },
+        "createdAt": { "$ref": "#/$defs/isoTimestamp" }
+      }
+    },
+    "annotationResolveMutation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "delivery", "queuePolicy", "mutationId", "annotationId", "expectedRevision", "resolved"],
+      "properties": {
+        "type": { "const": "annotation.resolve" },
+        "delivery": { "const": "durable" },
+        "queuePolicy": { "const": "offline_allowed" },
+        "mutationId": { "$ref": "#/$defs/mutationId" },
+        "annotationId": { "$ref": "#/$defs/opaqueId" },
+        "expectedRevision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "resolved": { "type": "boolean" }
+      }
+    },
+    "annotationDeleteMutation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "delivery", "queuePolicy", "mutationId", "annotationId", "expectedRevision"],
+      "properties": {
+        "type": { "const": "annotation.delete" },
+        "delivery": { "const": "durable" },
+        "queuePolicy": { "const": "offline_allowed" },
+        "mutationId": { "$ref": "#/$defs/mutationId" },
+        "annotationId": { "$ref": "#/$defs/opaqueId" },
+        "expectedRevision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 }
+      }
+    },
+    "annotationMutation": {
+      "oneOf": [
+        { "$ref": "#/$defs/annotationCreateMutation" },
+        { "$ref": "#/$defs/annotationUpdateMutation" },
+        { "$ref": "#/$defs/annotationReplyMutation" },
+        { "$ref": "#/$defs/annotationResolveMutation" },
+        { "$ref": "#/$defs/annotationDeleteMutation" }
+      ]
+    },
+    "writerControlCasCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "delivery", "queuePolicy", "resource", "expectedVersion", "expectedFence", "desiredOwnerClientId", "leaseMs"],
+      "properties": {
+        "type": { "const": "writer.control.cas" },
+        "delivery": { "const": "ephemeral" },
+        "queuePolicy": { "const": "never" },
+        "resource": { "$ref": "#/$defs/writerResource" },
+        "expectedVersion": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "expectedFence": { "$ref": "#/$defs/fence" },
+        "desiredOwnerClientId": { "oneOf": [{ "$ref": "#/$defs/opaqueId" }, { "type": "null" }] },
+        "leaseMs": { "type": "integer", "minimum": 0, "maximum": 300000 }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "required": ["desiredOwnerClientId"],
+            "properties": { "desiredOwnerClientId": { "type": "null" } }
+          },
+          "then": {
+            "type": "object",
+            "properties": { "leaseMs": { "const": 0 } }
+          },
+          "else": {
+            "type": "object",
+            "properties": { "leaseMs": { "type": "integer", "minimum": 1000 } }
+          }
+        }
+      ]
+    },
+    "recoveryDraftPutMutation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "delivery", "queuePolicy", "mutationId", "draft"],
+      "properties": {
+        "type": { "const": "recovery.draft.put" },
+        "delivery": { "const": "durable" },
+        "queuePolicy": { "const": "offline_allowed" },
+        "mutationId": { "$ref": "#/$defs/mutationId" },
+        "draft": { "$ref": "#/$defs/recoveryDraftInput" }
+      }
+    },
+    "recoveryDraftDeleteMutation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "delivery", "queuePolicy", "mutationId", "draftId", "expectedUpdatedAt"],
+      "properties": {
+        "type": { "const": "recovery.draft.delete" },
+        "delivery": { "const": "durable" },
+        "queuePolicy": { "const": "offline_allowed" },
+        "mutationId": { "$ref": "#/$defs/mutationId" },
+        "draftId": { "$ref": "#/$defs/opaqueId" },
+        "expectedUpdatedAt": { "$ref": "#/$defs/isoTimestamp" }
+      }
+    },
+    "terminalControlCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "delivery", "queuePolicy", "sessionId", "action", "expectedVersion", "expectedFence"],
+      "properties": {
+        "type": { "const": "terminal.control" },
+        "delivery": { "const": "ephemeral" },
+        "queuePolicy": { "const": "never" },
+        "sessionId": { "$ref": "#/$defs/opaqueId" },
+        "action": { "enum": ["request", "release"] },
+        "expectedVersion": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "expectedFence": { "$ref": "#/$defs/fence" }
+      }
+    },
+    "terminalInputCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "delivery", "queuePolicy", "sessionId", "inputSequence", "fence", "encoding", "data"],
+      "properties": {
+        "type": { "const": "terminal.input" },
+        "delivery": { "const": "ephemeral" },
+        "queuePolicy": { "const": "never" },
+        "sessionId": { "$ref": "#/$defs/opaqueId" },
+        "inputSequence": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "fence": { "$ref": "#/$defs/fence" },
+        "encoding": { "const": "utf8" },
+        "data": { "type": "string", "minLength": 1, "maxLength": 65536 }
+      }
+    },
+    "commandPayload": {
+      "oneOf": [
+        { "$ref": "#/$defs/presencePublishCommand" },
+        { "$ref": "#/$defs/annotationMutation" },
+        { "$ref": "#/$defs/writerControlCasCommand" },
+        { "$ref": "#/$defs/recoveryDraftPutMutation" },
+        { "$ref": "#/$defs/recoveryDraftDeleteMutation" },
+        { "$ref": "#/$defs/terminalControlCommand" },
+        { "$ref": "#/$defs/terminalInputCommand" }
+      ]
+    },
+    "commandEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "protocolVersion", "roomId", "requestId", "sentAt", "payload"],
+      "properties": {
+        "kind": { "const": "command" },
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "roomId": { "$ref": "#/$defs/opaqueId" },
+        "requestId": { "$ref": "#/$defs/mutationId" },
+        "sentAt": { "$ref": "#/$defs/isoTimestamp" },
+        "payload": { "$ref": "#/$defs/commandPayload" }
+      }
+    },
+    "protocolError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "retryable"],
+      "properties": {
+        "code": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Z][A-Z0-9_]*$" },
+        "message": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "retryable": { "type": "boolean" }
+      }
+    },
+    "presenceChangedEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "presence"],
+      "properties": {
+        "type": { "const": "presence.changed" },
+        "presence": { "$ref": "#/$defs/presenceState" }
+      }
+    },
+    "annotationAckSuccess": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "requestId", "mutationId", "status", "annotationId", "appliedRevision", "error"],
+      "properties": {
+        "type": { "const": "annotation.ack" },
+        "requestId": { "$ref": "#/$defs/mutationId" },
+        "mutationId": { "$ref": "#/$defs/mutationId" },
+        "status": { "enum": ["applied", "duplicate"] },
+        "annotationId": { "$ref": "#/$defs/opaqueId" },
+        "appliedRevision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "error": { "type": "null" }
+      }
+    },
+    "annotationAckFailure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "requestId", "mutationId", "status", "annotationId", "appliedRevision", "error"],
+      "properties": {
+        "type": { "const": "annotation.ack" },
+        "requestId": { "$ref": "#/$defs/mutationId" },
+        "mutationId": { "$ref": "#/$defs/mutationId" },
+        "status": { "enum": ["conflict", "rejected"] },
+        "annotationId": { "$ref": "#/$defs/opaqueId" },
+        "appliedRevision": {
+          "oneOf": [
+            { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+            { "type": "null" }
+          ]
+        },
+        "error": { "$ref": "#/$defs/protocolError" }
+      }
+    },
+    "annotationMutationAck": {
+      "oneOf": [{ "$ref": "#/$defs/annotationAckSuccess" }, { "$ref": "#/$defs/annotationAckFailure" }]
+    },
+    "annotationChangedUpsert": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "mutationId", "operation", "annotation", "tombstone"],
+      "properties": {
+        "type": { "const": "annotation.changed" },
+        "mutationId": { "$ref": "#/$defs/mutationId" },
+        "operation": { "enum": ["create", "update", "reply", "resolve"] },
+        "annotation": { "$ref": "#/$defs/annotation" },
+        "tombstone": { "type": "null" }
+      }
+    },
+    "annotationChangedDelete": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "mutationId", "operation", "annotation", "tombstone"],
+      "properties": {
+        "type": { "const": "annotation.changed" },
+        "mutationId": { "$ref": "#/$defs/mutationId" },
+        "operation": { "const": "delete" },
+        "annotation": { "type": "null" },
+        "tombstone": { "$ref": "#/$defs/annotationTombstone" }
+      }
+    },
+    "annotationChangedEvent": {
+      "oneOf": [{ "$ref": "#/$defs/annotationChangedUpsert" }, { "$ref": "#/$defs/annotationChangedDelete" }]
+    },
+    "writerControlAckSuccess": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "requestId", "status", "state", "error"],
+      "properties": {
+        "type": { "const": "writer.control.ack" },
+        "requestId": { "$ref": "#/$defs/mutationId" },
+        "status": { "const": "applied" },
+        "state": { "$ref": "#/$defs/writerControlState" },
+        "error": { "type": "null" }
+      }
+    },
+    "writerControlAckFailure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "requestId", "status", "state", "error"],
+      "properties": {
+        "type": { "const": "writer.control.ack" },
+        "requestId": { "$ref": "#/$defs/mutationId" },
+        "status": { "enum": ["compare_failed", "denied"] },
+        "state": { "$ref": "#/$defs/writerControlState" },
+        "error": { "$ref": "#/$defs/protocolError" }
+      }
+    },
+    "writerControlAck": {
+      "oneOf": [{ "$ref": "#/$defs/writerControlAckSuccess" }, { "$ref": "#/$defs/writerControlAckFailure" }]
+    },
+    "writerControlChangedEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "state", "previousFence", "reason"],
+      "properties": {
+        "type": { "const": "writer.control.changed" },
+        "state": { "$ref": "#/$defs/writerControlState" },
+        "previousFence": { "$ref": "#/$defs/fence" },
+        "reason": { "enum": ["acquired", "released", "expired", "revoked", "disconnected"] }
+      }
+    },
+    "writerFenceAdvancedEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "resource", "version", "previousFence", "fence", "revokedClientId", "reason"],
+      "properties": {
+        "type": { "const": "writer.fence.advanced" },
+        "resource": { "$ref": "#/$defs/writerResource" },
+        "version": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "previousFence": { "$ref": "#/$defs/fence" },
+        "fence": { "$ref": "#/$defs/fence" },
+        "revokedClientId": { "oneOf": [{ "$ref": "#/$defs/opaqueId" }, { "type": "null" }] },
+        "reason": { "enum": ["release", "expiry", "revocation", "disconnect"] }
+      }
+    },
+    "recoveryAckSuccess": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "requestId", "mutationId", "status", "draftId", "updatedAt", "error"],
+      "properties": {
+        "type": { "const": "recovery.ack" },
+        "requestId": { "$ref": "#/$defs/mutationId" },
+        "mutationId": { "$ref": "#/$defs/mutationId" },
+        "status": { "enum": ["applied", "duplicate"] },
+        "draftId": { "$ref": "#/$defs/opaqueId" },
+        "updatedAt": { "$ref": "#/$defs/isoTimestamp" },
+        "error": { "type": "null" }
+      }
+    },
+    "recoveryAckFailure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "requestId", "mutationId", "status", "draftId", "updatedAt", "error"],
+      "properties": {
+        "type": { "const": "recovery.ack" },
+        "requestId": { "$ref": "#/$defs/mutationId" },
+        "mutationId": { "$ref": "#/$defs/mutationId" },
+        "status": { "enum": ["conflict", "rejected"] },
+        "draftId": { "$ref": "#/$defs/opaqueId" },
+        "updatedAt": { "oneOf": [{ "$ref": "#/$defs/isoTimestamp" }, { "type": "null" }] },
+        "error": { "$ref": "#/$defs/protocolError" }
+      }
+    },
+    "recoveryDraftAck": {
+      "oneOf": [{ "$ref": "#/$defs/recoveryAckSuccess" }, { "$ref": "#/$defs/recoveryAckFailure" }]
+    },
+    "recoveryDraftChangedPut": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "mutationId", "operation", "draft", "deletedDraftId"],
+      "properties": {
+        "type": { "const": "recovery.draft.changed" },
+        "mutationId": { "$ref": "#/$defs/mutationId" },
+        "operation": { "const": "put" },
+        "draft": { "$ref": "#/$defs/recoveryDraftSummary" },
+        "deletedDraftId": { "type": "null" }
+      }
+    },
+    "recoveryDraftChangedDelete": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "mutationId", "operation", "draft", "deletedDraftId"],
+      "properties": {
+        "type": { "const": "recovery.draft.changed" },
+        "mutationId": { "$ref": "#/$defs/mutationId" },
+        "operation": { "const": "delete" },
+        "draft": { "type": "null" },
+        "deletedDraftId": { "$ref": "#/$defs/opaqueId" }
+      }
+    },
+    "recoveryDraftChangedEvent": {
+      "oneOf": [{ "$ref": "#/$defs/recoveryDraftChangedPut" }, { "$ref": "#/$defs/recoveryDraftChangedDelete" }]
+    },
+    "terminalControlAckSuccess": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "requestId", "status", "state", "error"],
+      "properties": {
+        "type": { "const": "terminal.control.ack" },
+        "requestId": { "$ref": "#/$defs/mutationId" },
+        "status": { "const": "applied" },
+        "state": { "$ref": "#/$defs/writerControlState" },
+        "error": { "type": "null" }
+      }
+    },
+    "terminalControlAckFailure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "requestId", "status", "state", "error"],
+      "properties": {
+        "type": { "const": "terminal.control.ack" },
+        "requestId": { "$ref": "#/$defs/mutationId" },
+        "status": { "enum": ["compare_failed", "denied", "session_missing"] },
+        "state": { "oneOf": [{ "$ref": "#/$defs/writerControlState" }, { "type": "null" }] },
+        "error": { "$ref": "#/$defs/protocolError" }
+      }
+    },
+    "terminalControlAck": {
+      "oneOf": [{ "$ref": "#/$defs/terminalControlAckSuccess" }, { "$ref": "#/$defs/terminalControlAckFailure" }]
+    },
+    "terminalInputRejectedEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "requestId", "sessionId", "inputSequence", "currentFence", "error"],
+      "properties": {
+        "type": { "const": "terminal.input.rejected" },
+        "requestId": { "$ref": "#/$defs/mutationId" },
+        "sessionId": { "$ref": "#/$defs/opaqueId" },
+        "inputSequence": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "currentFence": { "oneOf": [{ "$ref": "#/$defs/fence" }, { "type": "null" }] },
+        "error": { "$ref": "#/$defs/protocolError" }
+      }
+    },
+    "eventPayload": {
+      "oneOf": [
+        { "$ref": "#/$defs/presenceChangedEvent" },
+        { "$ref": "#/$defs/annotationMutationAck" },
+        { "$ref": "#/$defs/annotationChangedEvent" },
+        { "$ref": "#/$defs/writerControlAck" },
+        { "$ref": "#/$defs/writerControlChangedEvent" },
+        { "$ref": "#/$defs/writerFenceAdvancedEvent" },
+        { "$ref": "#/$defs/recoveryDraftAck" },
+        { "$ref": "#/$defs/recoveryDraftChangedEvent" },
+        { "$ref": "#/$defs/terminalControlAck" },
+        { "$ref": "#/$defs/terminalInputRejectedEvent" }
+      ]
+    },
+    "durableEventEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "protocolVersion", "roomId", "eventId", "emittedAt", "stream", "sequence", "cursor", "previousCursor", "payload"],
+      "properties": {
+        "kind": { "const": "event" },
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "roomId": { "$ref": "#/$defs/opaqueId" },
+        "eventId": { "$ref": "#/$defs/opaqueId" },
+        "emittedAt": { "$ref": "#/$defs/isoTimestamp" },
+        "stream": { "const": "durable" },
+        "sequence": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "cursor": { "$ref": "#/$defs/replayCursor" },
+        "previousCursor": { "oneOf": [{ "$ref": "#/$defs/replayCursor" }, { "type": "null" }] },
+        "payload": { "$ref": "#/$defs/eventPayload" }
+      }
+    },
+    "ephemeralEventEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "protocolVersion", "roomId", "eventId", "emittedAt", "stream", "sequence", "cursor", "previousCursor", "payload"],
+      "properties": {
+        "kind": { "const": "event" },
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "roomId": { "$ref": "#/$defs/opaqueId" },
+        "eventId": { "$ref": "#/$defs/opaqueId" },
+        "emittedAt": { "$ref": "#/$defs/isoTimestamp" },
+        "stream": { "const": "ephemeral" },
+        "sequence": { "type": "null" },
+        "cursor": { "type": "null" },
+        "previousCursor": { "type": "null" },
+        "payload": { "$ref": "#/$defs/eventPayload" }
+      }
+    },
+    "snapshotEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "protocolVersion", "roomId", "sequence", "cursor", "emittedAt", "snapshot"],
+      "properties": {
+        "kind": { "const": "snapshot" },
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "roomId": { "$ref": "#/$defs/opaqueId" },
+        "sequence": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "cursor": { "$ref": "#/$defs/replayCursor" },
+        "emittedAt": { "$ref": "#/$defs/isoTimestamp" },
+        "snapshot": { "$ref": "#/$defs/roomSnapshot" }
+      }
+    }
+  }
+}
