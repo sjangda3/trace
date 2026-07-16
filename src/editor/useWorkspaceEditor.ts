@@ -158,7 +158,7 @@ async function prepareWorkspace(
   return { tree, documents, activePath };
 }
 
-export function useWorkspaceEditor() {
+export function useWorkspaceEditor({ commandsEnabled = true }: { commandsEnabled?: boolean } = {}) {
   const [workspace, setWorkspace] = useState<WorkspaceDescriptor | null>(null);
   const [tree, setTree] = useState<WorkspaceTree>([]);
   const [documents, setDocuments] = useState<OpenDocument[]>([]);
@@ -864,7 +864,7 @@ export function useWorkspaceEditor() {
     });
 
     const disposeCommands = api.onCommand((event) => {
-      if (event.command === "open-folder") void openFolder();
+      if (event.command === "open-folder" && commandsEnabled) void openFolder();
       if (event.command === "close-window") setWindowCloseRequestToken((value) => value + 1);
     });
 
@@ -873,7 +873,7 @@ export function useWorkspaceEditor() {
       disposeCommands();
       if (treeRefreshTimerRef.current !== null) window.clearTimeout(treeRefreshTimerRef.current);
     };
-  }, [closeDocument, openFolder, scheduleTreeRefresh, showNotice, workspace]);
+  }, [closeDocument, commandsEnabled, openFolder, scheduleTreeRefresh, showNotice, workspace]);
 
   const activeDocument = documents.find((document) => document.path === activePath) ?? null;
 

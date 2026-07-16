@@ -13,8 +13,14 @@ const { GitHubManager } = require("./github.cjs");
 const { AnnotationManager } = require("./annotations.cjs");
 const { CollaborationManager } = require("./collaboration.cjs");
 const { WorkspaceSearchManager } = require("./workspace-search.cjs");
+const { TraceAccountManager } = require("./account.cjs");
 
 app.setName("Trace");
+if (process.defaultApp && process.argv[1]) {
+  app.setAsDefaultProtocolClient("trace", process.execPath, [path.resolve(process.argv[1])]);
+} else {
+  app.setAsDefaultProtocolClient("trace");
+}
 
 let workspaceManager;
 let terminalManager;
@@ -23,10 +29,35 @@ let githubManager;
 let annotationManager;
 let collaborationManager;
 let workspaceSearchManager;
+let accountManager;
 const approvedWindows = new WeakSet();
 let quitRequested = false;
 let workspaceSwitchPending = false;
+let pendingInviteToken = null;
+let pendingPasswordResetToken = null;
 const rendererEntryPath = path.resolve(__dirname, "../dist/index.html");
+
+function receiveTraceLink(rawUrl) {
+  try {
+    const url = new URL(rawUrl);
+    const token = url.searchParams.get("token");
+    if (url.protocol !== "trace:" || !token || !/^[A-Za-z0-9_-]{32,128}$/u.test(token)) return;
+    const kind = url.hostname === "invite" ? "invite" : url.hostname === "reset-password" ? "password-reset" : null;
+    if (!kind) return;
+    if (kind === "invite") pendingInviteToken = token;
+    else pendingPasswordResetToken = token;
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) window.webContents.send("account:deep-link", { kind });
+    }
+  } catch {
+    // Invalid custom-protocol URLs are ignored without exposing their contents.
+  }
+}
+
+app.on("open-url", (event, url) => {
+  event.preventDefault();
+  receiveTraceLink(url);
+});
 
 function isAllowedRendererUrl(rawUrl) {
   try {
@@ -200,6 +231,10 @@ function createWindow() {
   }
 
   window.once("ready-to-show", () => window.show());
+  window.webContents.once("did-finish-load", () => {
+    if (pendingInviteToken) window.webContents.send("account:deep-link", { kind: "invite" });
+    if (pendingPasswordResetToken) window.webContents.send("account:deep-link", { kind: "password-reset" });
+  });
 }
 
 function isTrustedSender(event) {
@@ -574,6 +609,42 @@ function registerCollaborationIpc() {
   registerResultHandler("collaboration:mark-typing", mutation("markTyping"));
 }
 
+function registerAccountIpc() {
+  const accounts = () => {
+    if (!accountManager) throw new WorkspaceError("ACCOUNT_UNAVAILABLE", "Trace account services are unavailable.");
+    return accountManager;
+  };
+  registerResultHandler("account:state", async () => accounts().getState());
+  registerResultHandler("account:sign-up", async (_event, request) => accounts().signUp(request));
+  registerResultHandler("account:sign-in", async (_event, request) => accounts().signIn(request));
+  registerResultHandler("account:resend-verification", async (_event, request) => accounts().resendVerification(request));
+  registerResultHandler("account:request-password-reset", async (_event, request) => accounts().requestPasswordReset(request));
+  registerResultHandler("account:confirm-password-reset", async (_event, request) => accounts().confirmPasswordReset(request));
+  registerResultHandler("account:refresh-state", async () => accounts().refreshState());
+  registerResultHandler("account:sign-out", async () => accounts().signOut());
+  registerResultHandler("account:begin-github-link", async () => accounts().beginGitHubLink());
+  registerResultHandler("account:open-github-app-install", async () => accounts().openGitHubAppInstall());
+  registerResultHandler("account:list-installations", async () => accounts().listInstallations());
+  registerResultHandler("account:list-repositories", async (_event, installationId) => accounts().listRepositories(installationId));
+  registerResultHandler("account:create-workspace", async (_event, request) => accounts().createWorkspace(request));
+  registerResultHandler("account:create-invite", async (_event, request) => accounts().createInvite(request));
+  registerResultHandler("account:redeem-invite", async (_event, request) => accounts().redeemInvite(request));
+  registerResultHandler("account:pending-invite", async () => ({ pending: Boolean(pendingInviteToken) }));
+  registerResultHandler("account:redeem-pending-invite", async () => {
+    if (!pendingInviteToken) throw new WorkspaceError("INVITE_UNAVAILABLE", "There is no pending Trace invitation.");
+    const result = await accounts().redeemInvite({ tokenOrLink: pendingInviteToken });
+    pendingInviteToken = null;
+    return result;
+  });
+  registerResultHandler("account:pending-password-reset", async () => ({ pending: Boolean(pendingPasswordResetToken) }));
+  registerResultHandler("account:confirm-pending-password-reset", async (_event, request) => {
+    if (!pendingPasswordResetToken) throw new WorkspaceError("TOKEN_INVALID_OR_EXPIRED", "There is no pending password reset.");
+    const result = await accounts().confirmPasswordReset({ ...request, token: pendingPasswordResetToken });
+    pendingPasswordResetToken = null;
+    return result;
+  });
+}
+
 ipcMain.on("window-control", (event, action) => {
   if (!isTrustedSender(event) || !["close", "confirm-close", "cancel-close", "minimize", "zoom"].includes(action)) return;
   const window = BrowserWindow.fromWebContents(event.sender);
@@ -627,6 +698,12 @@ app.whenReady().then(async () => {
     clientId: process.env.TRACE_GITHUB_CLIENT_ID?.trim() || "",
     appSlug: process.env.TRACE_GITHUB_APP_SLUG?.trim() || "trace",
   });
+  accountManager = new TraceAccountManager({
+    safeStorage,
+    shell,
+    settingsPath: path.join(app.getPath("userData"), "trace-account-session.v1.json"),
+    controlPlaneUrl: process.env.TRACE_CONTROL_PLANE_URL?.trim() || "",
+  });
   annotationManager = new AnnotationManager({
     workspaceManager,
     settingsPath: path.join(app.getPath("userData"), "annotations.v1.json"),
@@ -643,6 +720,7 @@ app.whenReady().then(async () => {
   registerGitHubIpc();
   registerAnnotationIpc();
   registerCollaborationIpc();
+  registerAccountIpc();
   installMenu();
   createWindow();
 

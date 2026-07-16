@@ -1,8 +1,27 @@
 export { buildApp, type BuildAppOptions } from "./app.js";
 export {
   DevBearerAuthProvider,
+  TraceAccessTokenAuthProvider,
   type AuthProvider,
 } from "./auth.js";
+export {
+  AccessTokenCodec,
+  Argon2idPasswordHasher,
+  FixedWindowRateLimiter,
+  SecretBox,
+  TokenHasher,
+  type AccountUser,
+  type DeviceSession,
+  type GitHubIdentity,
+} from "./accounts.js";
+export { AccountService, type PublicAccount } from "./account-service.js";
+export { InMemoryAccountMailer, ResendAccountMailer, type AccountMailer } from "./mailer.js";
+export {
+  GitHubAppApiBroker,
+  GitHubOAuthWebClient,
+  type GitHubAppBroker,
+  type GitHubOAuthClient,
+} from "./github-auth.js";
 export type {
   AuthenticatedActor,
   CodeControl,

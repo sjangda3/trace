@@ -103,3 +103,26 @@ contextBridge.exposeInMainWorld("collabCollaboration", {
   markTyping: (request) => ipcRenderer.invoke("collaboration:mark-typing", request),
   onDidChange: (callback) => subscribe("collaboration:changed", callback),
 });
+
+contextBridge.exposeInMainWorld("traceAccount", {
+  state: () => ipcRenderer.invoke("account:state"),
+  signUp: (request) => ipcRenderer.invoke("account:sign-up", request),
+  signIn: (request) => ipcRenderer.invoke("account:sign-in", request),
+  resendVerification: (request) => ipcRenderer.invoke("account:resend-verification", request),
+  requestPasswordReset: (request) => ipcRenderer.invoke("account:request-password-reset", request),
+  confirmPasswordReset: (request) => ipcRenderer.invoke("account:confirm-password-reset", request),
+  refreshState: () => ipcRenderer.invoke("account:refresh-state"),
+  signOut: () => ipcRenderer.invoke("account:sign-out"),
+  beginGitHubLink: () => ipcRenderer.invoke("account:begin-github-link"),
+  openGitHubAppInstall: () => ipcRenderer.invoke("account:open-github-app-install"),
+  listInstallations: () => ipcRenderer.invoke("account:list-installations"),
+  listRepositories: (installationId) => ipcRenderer.invoke("account:list-repositories", installationId),
+  createWorkspace: (request) => ipcRenderer.invoke("account:create-workspace", request),
+  createInvite: (request) => ipcRenderer.invoke("account:create-invite", request),
+  redeemInvite: (request) => ipcRenderer.invoke("account:redeem-invite", request),
+  pendingInvite: () => ipcRenderer.invoke("account:pending-invite"),
+  redeemPendingInvite: () => ipcRenderer.invoke("account:redeem-pending-invite"),
+  pendingPasswordReset: () => ipcRenderer.invoke("account:pending-password-reset"),
+  confirmPendingPasswordReset: (request) => ipcRenderer.invoke("account:confirm-pending-password-reset", request),
+  onDeepLink: (callback) => subscribe("account:deep-link", callback),
+});

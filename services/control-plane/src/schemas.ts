@@ -51,6 +51,7 @@ export const createWorkspaceBodySchema = {
   properties: {
     name: { type: "string", minLength: 1, maxLength: 80 },
     repository: repositoryBindingSchema,
+    installationId: { type: "string", pattern: "^[0-9]+$" },
   },
   additionalProperties: false,
 };
@@ -63,6 +64,7 @@ export const createInviteBodySchema = {
       minimum: 300,
       maximum: 604800,
     },
+    email: { type: "string", minLength: 3, maxLength: 254 },
   },
   additionalProperties: false,
 };
@@ -137,6 +139,7 @@ const inviteMetadataProperties = {
   createdByUserId: { type: "string", minLength: 1, maxLength: 128 },
   createdAt: { type: "string", pattern: TIMESTAMP_PATTERN },
   expiresAt: { type: "string", pattern: TIMESTAMP_PATTERN },
+  recipientEmail: { anyOf: [{ type: "string", minLength: 3, maxLength: 254 }, { type: "null" }] },
 };
 
 export const createWorkspaceResponseSchema = {
@@ -159,6 +162,7 @@ export const createInviteResponseSchema = {
       properties: {
         ...inviteMetadataProperties,
         token: { type: "string", pattern: "^[A-Za-z0-9_-]{43}$" },
+        link: { type: "string", maxLength: 2048 },
       },
       additionalProperties: false,
     },

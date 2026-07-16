@@ -80,6 +80,9 @@ import {
   type CodeAnnotation,
   type CollaborationApi,
 } from "./collaboration";
+import { Onboarding } from "./account/Onboarding";
+import { traceAccountApi } from "./account/api";
+import { launchViewForAccount, type TraceLaunchView } from "./account/launch-state";
 import "./git/git.css";
 
 type RailItem = {
@@ -220,37 +223,39 @@ function TreeRow({
           ))}
         </span>
       ) : null}
-      <span className="tree-chevron">
-        <AnimatePresence initial={false} mode="wait">
-          {loading ? (
-            <motion.span
-              className="tree-chevron-state"
-              key="loading"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.1, ease: "easeOut" }}
-            >
-              <LoaderCircle className="tree-loader" />
-            </motion.span>
-          ) : directory ? (
-            <motion.span
-              className={`tree-chevron-state tree-chevron-icon ${expanded ? "is-expanded" : ""}`}
-              key="chevron"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.1, ease: "easeOut" }}
-            >
-              <ChevronRight />
-            </motion.span>
-          ) : null}
-        </AnimatePresence>
+      <span className="tree-row-content">
+        <span className="tree-chevron">
+          <AnimatePresence initial={false} mode="wait">
+            {loading ? (
+              <motion.span
+                className="tree-chevron-state"
+                key="loading"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.1, ease: "easeOut" }}
+              >
+                <LoaderCircle className="tree-loader" />
+              </motion.span>
+            ) : directory ? (
+              <motion.span
+                className={`tree-chevron-state tree-chevron-icon ${expanded ? "is-expanded" : ""}`}
+                key="chevron"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.1, ease: "easeOut" }}
+              >
+                <ChevronRight />
+              </motion.span>
+            ) : null}
+          </AnimatePresence>
+        </span>
+        <span className={`file-glyph file-glyph--${kind}`}>
+          <FileGlyph kind={kind} />
+        </span>
+        <span className="tree-label">{row.node.name}</span>
       </span>
-      <span className={`file-glyph file-glyph--${kind}`}>
-        <FileGlyph kind={kind} />
-      </span>
-      <span className="tree-label">{row.node.name}</span>
     </button>
   );
 }
@@ -1040,6 +1045,21 @@ function Titlebar({
   );
 }
 
+function LaunchTitlebar() {
+  return (
+    <header className="launch-titlebar">
+      <div className="window-controls-space">
+        <div className="traffic-lights">
+          <button type="button" className="traffic-light traffic-light--close" aria-label="Close window" onClick={() => window.collabWindow?.close()} />
+          <button type="button" className="traffic-light traffic-light--minimize" aria-label="Minimize window" onClick={() => window.collabWindow?.minimize()} />
+          <button type="button" className="traffic-light traffic-light--zoom" aria-label="Zoom window" onClick={() => window.collabWindow?.zoom()} />
+        </div>
+      </div>
+      <span className="launch-title">Trace</span>
+    </header>
+  );
+}
+
 function Statusbar({
   branchName,
   terminalOpen,
@@ -1106,7 +1126,8 @@ function SidebarLayer({
 }
 
 export default function App() {
-  const editor = useWorkspaceEditor();
+  const [launchView, setLaunchView] = useState<TraceLaunchView>("checking");
+  const editor = useWorkspaceEditor({ commandsEnabled: launchView === "workspace" });
   const editorRef = useRef<MonacoEditorHandle | null>(null);
   const [activeRail, setActiveRail] = useState<RailItem["id"]>("files");
   const [terminalOpen, setTerminalOpen] = useState(false);
@@ -1135,6 +1156,27 @@ export default function App() {
   const [collaborationMessage, setCollaborationMessage] = useState<string | null>(null);
   const [pendingSearchFocus, setPendingSearchFocus] = useState<PendingSearchFocus | null>(null);
   const [searchMessage, setSearchMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!traceAccountApi) {
+      setLaunchView("onboarding");
+      return undefined;
+    }
+    void traceAccountApi.state()
+      .then((state) => {
+        if (!cancelled) setLaunchView(launchViewForAccount(state.user));
+      })
+      .catch(() => {
+        if (!cancelled) setLaunchView("onboarding");
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  const continueLocally = () => {
+    setLaunchView("workspace");
+    if (!editor.workspace) void editor.openFolder();
+  };
   const searchFocusRequestRef = useRef(0);
   const [navigationHistory, setNavigationHistory] = useState<NavigationHistory>({
     workspaceId: null,
@@ -1755,6 +1797,7 @@ export default function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (launchView !== "workspace") return;
       const command = event.metaKey || event.ctrlKey;
       const key = event.key.toLowerCase();
       const nativeMenuOwnsShortcut = Boolean(window.collabWorkspace) && command && (
@@ -1807,6 +1850,7 @@ export default function App() {
   useEffect(() => {
     const dispose = window.collabWorkspace?.onCommand((payload) => {
       const command = typeof payload === "string" ? payload : payload.command;
+      if (launchView !== "workspace") return;
       if (command === "quick-open") setQuickOpen(true);
       if (command === "workspace-search") setActiveRail("search");
       if (command === "navigate-back") navigateHistory(-1);
@@ -1851,6 +1895,23 @@ export default function App() {
       else window.collabWindow?.confirmClose();
     });
   }, [editor.windowCloseRequestToken]);
+
+  if (launchView !== "workspace") {
+    return (
+      <MotionConfig reducedMotion="user">
+        <div className="app-window app-window--onboarding">
+          <LaunchTitlebar />
+          <main className="onboarding-stage">
+            {launchView === "checking" ? (
+              <div className="launch-loading" role="status"><LoaderCircle />Checking your Trace session…</div>
+            ) : (
+              <Onboarding onContinueLocal={continueLocally} />
+            )}
+          </main>
+        </div>
+      </MotionConfig>
+    );
+  }
 
   return (
     <MotionConfig reducedMotion="user">

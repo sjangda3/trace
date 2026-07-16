@@ -1,6 +1,21 @@
 import { randomUUID } from "node:crypto";
 import type { Pool, PoolClient, QueryResultRow } from "pg";
 import type {
+  AccountUser,
+  AuthTokenKind,
+  CreateAccountInput,
+  CreateDeviceSessionInput,
+  CreateOneTimeTokenInput,
+  DeviceSession,
+  DeviceSessionRotation,
+  GitHubIdentity,
+  GitHubOAuthTransaction,
+  LinkGitHubIdentityInput,
+  RotateDeviceSessionInput,
+  StoredAccount,
+} from "../accounts.js";
+import type { GitHubInstallation, GitHubInstallationAccess, GitHubRepository } from "../github-auth.js";
+import type {
   AuthenticatedActor,
   CodeControl,
   InviteMetadata,
@@ -10,7 +25,6 @@ import type {
   Workspace,
   WorkspaceBootstrapState,
   WorkspaceMember,
-  WorkspaceRole,
   WorkspaceWriterControl,
 } from "../domain.js";
 import {
@@ -21,6 +35,7 @@ import {
   assertInviteTokenHash,
   assertRepositoryBinding,
   type ControlPlaneRepository,
+  type CreateGitHubOAuthTransactionInput,
   type CreateInviteInput,
   type CreateWorkspaceInput,
   type RedeemInviteInput,
@@ -53,6 +68,60 @@ interface InviteRow extends QueryResultRow {
   created_at: Date | string;
   expires_at: Date | string;
   redeemed_at: Date | string | null;
+  redeemed_by_user_id: string | null;
+  recipient_email: string | null;
+}
+
+interface AccountRow extends QueryResultRow {
+  id: string;
+  email: string;
+  display_name: string;
+  password_hash: string;
+  email_verified_at: Date | string | null;
+  created_at: Date | string;
+}
+
+interface SessionRow extends QueryResultRow {
+  id: string;
+  user_id: string;
+  device_id: string;
+  refresh_token_hash: string;
+  created_at: Date | string;
+  expires_at: Date | string;
+  last_used_at: Date | string;
+  revoked_at: Date | string | null;
+  replaced_by_session_id: string | null;
+}
+
+interface OAuthTransactionRow extends QueryResultRow {
+  id: string;
+  user_id: string;
+  state_hash: string;
+  code_verifier_ciphertext: string;
+  redirect_uri: string;
+  expires_at: Date | string;
+  consumed_at: Date | string | null;
+}
+
+interface GithubIdentityRow extends QueryResultRow {
+  user_id: string;
+  provider_subject: string;
+  login: string;
+  linked_at: Date | string;
+}
+
+interface GithubInstallationRow extends QueryResultRow {
+  id: string;
+  account_login: string;
+  account_type: "User" | "Organization";
+}
+
+interface GithubRepositoryRow extends QueryResultRow {
+  id: string;
+  owner: string;
+  name: string;
+  default_branch: string;
+  private: boolean;
 }
 
 interface SnapshotRow extends WorkspaceRow {
@@ -155,7 +224,43 @@ function inviteFromRow(row: InviteRow): InviteMetadata {
     createdByUserId: row.created_by_user_id,
     createdAt: timestamp(row.created_at),
     expiresAt: timestamp(row.expires_at),
+    recipientEmail: row.recipient_email,
   };
+}
+
+function accountFromRow(row: AccountRow): StoredAccount {
+  return {
+    id: row.id,
+    email: row.email,
+    displayName: row.display_name,
+    passwordHash: row.password_hash,
+    emailVerifiedAt: nullableTimestamp(row.email_verified_at),
+    createdAt: timestamp(row.created_at),
+  };
+}
+
+function publicAccount(account: StoredAccount): AccountUser {
+  const { passwordHash: _passwordHash, ...user } = account;
+  return user;
+}
+
+function sessionFromRow(row: SessionRow): DeviceSession {
+  return {
+    id: row.id, userId: row.user_id, deviceId: row.device_id, refreshTokenHash: row.refresh_token_hash,
+    createdAt: timestamp(row.created_at), expiresAt: timestamp(row.expires_at), lastUsedAt: timestamp(row.last_used_at),
+    revokedAt: nullableTimestamp(row.revoked_at), replacedBySessionId: row.replaced_by_session_id,
+  };
+}
+
+function oauthTransactionFromRow(row: OAuthTransactionRow): GitHubOAuthTransaction {
+  return {
+    id: row.id, userId: row.user_id, stateHash: row.state_hash, codeVerifierCiphertext: row.code_verifier_ciphertext,
+    redirectUri: row.redirect_uri, expiresAt: timestamp(row.expires_at), consumedAt: nullableTimestamp(row.consumed_at),
+  };
+}
+
+function githubIdentityFromRow(row: GithubIdentityRow): GitHubIdentity {
+  return { userId: row.user_id, providerSubject: row.provider_subject, login: row.login, linkedAt: timestamp(row.linked_at) };
 }
 
 function isUniqueViolation(error: unknown): boolean {
@@ -212,8 +317,8 @@ export class PostgresControlPlaneRepository implements ControlPlaneRepository {
       await client.query(
         `INSERT INTO workspaces
           (id, room_id, name, state, room_sequence, created_by_user_id, created_at,
-           repository_provider, repository_owner, repository_name, repository_default_branch)
-         VALUES ($1, $2, $3, 'created', 0, $4, $5, $6, $7, $8, $9)`,
+           repository_provider, repository_owner, repository_name, repository_default_branch, github_installation_id)
+         VALUES ($1, $2, $3, 'created', 0, $4, $5, $6, $7, $8, $9, $10)`,
         [
           workspace.id,
           workspace.roomId,
@@ -224,6 +329,7 @@ export class PostgresControlPlaneRepository implements ControlPlaneRepository {
           input.repository?.owner ?? null,
           input.repository?.name ?? null,
           input.repository?.defaultBranch ?? null,
+          input.githubInstallationId ?? null,
         ],
       );
       await client.query(
@@ -320,9 +426,9 @@ export class PostgresControlPlaneRepository implements ControlPlaneRepository {
       try {
         const result = await client.query<InviteRow>(
           `INSERT INTO workspace_invites
-            (id, workspace_id, token_hash, role, created_by_user_id, created_at, expires_at)
-           VALUES ($1, $2, $3, 'member', $4, $5, $6)
-           RETURNING id, workspace_id, role, created_by_user_id, created_at, expires_at, redeemed_at`,
+            (id, workspace_id, token_hash, role, created_by_user_id, created_at, expires_at, recipient_email)
+           VALUES ($1, $2, $3, 'member', $4, $5, $6, $7)
+           RETURNING id, workspace_id, role, created_by_user_id, created_at, expires_at, redeemed_at, recipient_email`,
           [
             this.#idFactory(),
             input.workspaceId,
@@ -330,6 +436,7 @@ export class PostgresControlPlaneRepository implements ControlPlaneRepository {
             input.actor.userId,
             now,
             expiresAt,
+            input.recipientEmail ?? null,
           ],
         );
         const row = result.rows[0];
@@ -348,7 +455,7 @@ export class PostgresControlPlaneRepository implements ControlPlaneRepository {
     return this.#transaction(async (client) => {
       assertInviteTokenHash(input.tokenHash);
       const inviteResult = await client.query<InviteRow>(
-        `SELECT id, workspace_id, role, created_by_user_id, created_at, expires_at, redeemed_at
+        `SELECT id, workspace_id, role, created_by_user_id, created_at, expires_at, redeemed_at, recipient_email, redeemed_by_user_id
            FROM workspace_invites
           WHERE token_hash = $1
           FOR UPDATE`,
@@ -356,11 +463,10 @@ export class PostgresControlPlaneRepository implements ControlPlaneRepository {
       );
       const invite = inviteResult.rows[0];
       const now = this.#now();
-      if (
-        !invite ||
-        invite.redeemed_at !== null ||
-        Date.parse(timestamp(invite.expires_at)) <= Date.parse(now)
-      ) {
+      if (!invite || Date.parse(timestamp(invite.expires_at)) <= Date.parse(now)) {
+        throw new RepositoryError("INVITE_UNAVAILABLE", "The invite cannot be redeemed.");
+      }
+      if (invite.recipient_email && invite.recipient_email !== input.actor.email) {
         throw new RepositoryError("INVITE_UNAVAILABLE", "The invite cannot be redeemed.");
       }
 
@@ -376,13 +482,21 @@ export class PostgresControlPlaneRepository implements ControlPlaneRepository {
         throw new RepositoryError("INVITE_UNAVAILABLE", "The invite cannot be redeemed.");
       }
 
-      const existing = await client.query<{ role: WorkspaceRole }>(
-        `SELECT role
+      const existing = await client.query<MemberRow>(
+        `SELECT wm.member_id, wm.workspace_id, wm.user_id, u.display_name, wm.role, wm.joined_at
            FROM workspace_members
+           JOIN users u ON u.id = workspace_members.user_id
           WHERE workspace_id = $1 AND user_id = $2`,
         [invite.workspace_id, input.actor.userId],
       );
-      if (existing.rowCount && existing.rowCount > 0) {
+      const existingMember = existing.rows[0];
+      if (invite.redeemed_at !== null) {
+        if (invite.redeemed_by_user_id === input.actor.userId && existingMember) {
+          return { workspace: workspaceFromRow(workspaceRow), membership: memberFromRow(existingMember) };
+        }
+        throw new RepositoryError("INVITE_UNAVAILABLE", "The invite cannot be redeemed.");
+      }
+      if (existingMember) {
         throw new RepositoryError("ALREADY_MEMBER", "The user is already a workspace member.");
       }
 
@@ -472,6 +586,231 @@ export class PostgresControlPlaneRepository implements ControlPlaneRepository {
       codeControl,
       writerControl,
     };
+  }
+
+  async createAccount(input: CreateAccountInput): Promise<AccountUser | null> {
+    const now = this.#now();
+    try {
+      const result = await this.#pool.query<AccountRow>(
+        `INSERT INTO users (id, email, display_name, password_hash, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $5)
+         RETURNING id, email, display_name, password_hash, email_verified_at, created_at`,
+        [this.#idFactory(), input.email, input.displayName, input.passwordHash, now],
+      );
+      const row = result.rows[0];
+      return row ? publicAccount(accountFromRow(row)) : null;
+    } catch (error) {
+      if (isUniqueViolation(error)) return null;
+      throw error;
+    }
+  }
+
+  async getAccountByEmail(email: string): Promise<StoredAccount | null> {
+    const result = await this.#pool.query<AccountRow>(
+      `SELECT id, email, display_name, password_hash, email_verified_at, created_at FROM users WHERE email = $1`, [email],
+    );
+    return result.rows[0] ? accountFromRow(result.rows[0]) : null;
+  }
+
+  async getAccountById(userId: string): Promise<StoredAccount | null> {
+    const result = await this.#pool.query<AccountRow>(
+      `SELECT id, email, display_name, password_hash, email_verified_at, created_at FROM users WHERE id = $1 AND email IS NOT NULL AND password_hash IS NOT NULL`, [userId],
+    );
+    return result.rows[0] ? accountFromRow(result.rows[0]) : null;
+  }
+
+  async replacePassword(userId: string, passwordHash: string): Promise<boolean> {
+    const result = await this.#pool.query(
+      `UPDATE users SET password_hash = $2, updated_at = $3 WHERE id = $1 AND email IS NOT NULL`,
+      [userId, passwordHash, this.#now()],
+    );
+    return result.rowCount === 1;
+  }
+
+  async markEmailVerified(userId: string): Promise<AccountUser | null> {
+    const now = this.#now();
+    const result = await this.#pool.query<AccountRow>(
+      `UPDATE users SET email_verified_at = COALESCE(email_verified_at, $2), updated_at = $2
+        WHERE id = $1 AND email IS NOT NULL AND password_hash IS NOT NULL
+        RETURNING id, email, display_name, password_hash, email_verified_at, created_at`, [userId, now],
+    );
+    return result.rows[0] ? publicAccount(accountFromRow(result.rows[0])) : null;
+  }
+
+  async createOneTimeToken(input: CreateOneTimeTokenInput): Promise<void> {
+    await this.#pool.query(
+      `INSERT INTO auth_one_time_tokens (id, kind, user_id, token_hash, expires_at, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [this.#idFactory(), input.kind, input.userId, input.tokenHash, input.expiresAt, this.#now()],
+    );
+  }
+
+  async consumeOneTimeToken(kind: AuthTokenKind, tokenHash: string): Promise<AccountUser | null> {
+    return this.#transaction(async (client) => {
+      const now = this.#now();
+      const token = await client.query<{ user_id: string }>(
+        `UPDATE auth_one_time_tokens SET consumed_at = $3
+          WHERE kind = $1 AND token_hash = $2 AND consumed_at IS NULL AND expires_at > $3
+          RETURNING user_id`, [kind, tokenHash, now],
+      );
+      const userId = token.rows[0]?.user_id;
+      if (!userId) return null;
+      const users = await client.query<AccountRow>(
+        `SELECT id, email, display_name, password_hash, email_verified_at, created_at FROM users WHERE id = $1`, [userId],
+      );
+      return users.rows[0] ? publicAccount(accountFromRow(users.rows[0])) : null;
+    });
+  }
+
+  async createDeviceSession(input: CreateDeviceSessionInput): Promise<DeviceSession> {
+    const now = this.#now();
+    const result = await this.#pool.query<SessionRow>(
+      `INSERT INTO device_sessions (id, user_id, device_id, refresh_token_hash, created_at, expires_at, last_used_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $5)
+       RETURNING id, user_id, device_id, refresh_token_hash, created_at, expires_at, last_used_at, revoked_at, replaced_by_session_id`,
+      [this.#idFactory(), input.userId, input.deviceId, input.refreshTokenHash, now, input.expiresAt],
+    );
+    const row = result.rows[0];
+    if (!row) throw new Error("PostgreSQL did not return the device session.");
+    return sessionFromRow(row);
+  }
+
+  async rotateDeviceSession(input: RotateDeviceSessionInput): Promise<DeviceSessionRotation> {
+    return this.#transaction(async (client) => {
+      const now = this.#now();
+      const previous = await client.query<SessionRow>(
+        `SELECT id, user_id, device_id, refresh_token_hash, created_at, expires_at, last_used_at, revoked_at, replaced_by_session_id
+           FROM device_sessions WHERE refresh_token_hash = $1 FOR UPDATE`, [input.previousRefreshTokenHash],
+      );
+      const previousSession = previous.rows[0];
+      if (!previousSession) return { kind: "missing" };
+      const expired = Date.parse(timestamp(previousSession.expires_at)) <= Date.parse(now);
+      if (previousSession.revoked_at || previousSession.replaced_by_session_id || expired) {
+        await client.query(`UPDATE device_sessions SET revoked_at = COALESCE(revoked_at, $2) WHERE user_id = $1`, [previousSession.user_id, now]);
+        return { kind: "reused-or-revoked" };
+      }
+      const account = await client.query<AccountRow>(
+        `SELECT id, email, display_name, password_hash, email_verified_at, created_at FROM users WHERE id = $1`, [previousSession.user_id],
+      );
+      const accountRow = account.rows[0];
+      if (!accountRow) return { kind: "missing" };
+      const created = await client.query<SessionRow>(
+        `INSERT INTO device_sessions (id, user_id, device_id, refresh_token_hash, created_at, expires_at, last_used_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $5)
+         RETURNING id, user_id, device_id, refresh_token_hash, created_at, expires_at, last_used_at, revoked_at, replaced_by_session_id`,
+        [this.#idFactory(), previousSession.user_id, input.deviceId, input.refreshTokenHash, now, input.expiresAt],
+      );
+      const sessionRow = created.rows[0];
+      if (!sessionRow) throw new Error("PostgreSQL did not return the rotated session.");
+      await client.query(`UPDATE device_sessions SET replaced_by_session_id = $2, last_used_at = $3 WHERE id = $1`, [previousSession.id, sessionRow.id, now]);
+      return { kind: "rotated", user: publicAccount(accountFromRow(accountRow)), session: sessionFromRow(sessionRow) };
+    });
+  }
+
+  async revokeDeviceSession(refreshTokenHash: string): Promise<void> {
+    await this.#pool.query(`UPDATE device_sessions SET revoked_at = COALESCE(revoked_at, $2) WHERE refresh_token_hash = $1`, [refreshTokenHash, this.#now()]);
+  }
+
+  async isDeviceSessionActive(sessionId: string, userId: string): Promise<boolean> {
+    const result = await this.#pool.query<{ active: boolean }>(
+      `SELECT EXISTS(SELECT 1 FROM device_sessions WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL AND replaced_by_session_id IS NULL AND expires_at > $3) AS active`, [sessionId, userId, this.#now()],
+    );
+    return result.rows[0]?.active === true;
+  }
+
+  async revokeAllDeviceSessions(userId: string): Promise<void> {
+    await this.#pool.query(`UPDATE device_sessions SET revoked_at = COALESCE(revoked_at, $2) WHERE user_id = $1`, [userId, this.#now()]);
+  }
+
+  async createGitHubOAuthTransaction(input: CreateGitHubOAuthTransactionInput): Promise<GitHubOAuthTransaction> {
+    const id = this.#idFactory();
+    const result = await this.#pool.query<OAuthTransactionRow>(
+      `INSERT INTO github_oauth_transactions (id, user_id, state_hash, code_verifier_ciphertext, redirect_uri, expires_at, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id, user_id, state_hash, code_verifier_ciphertext, redirect_uri, expires_at, consumed_at`,
+      [id, input.userId, input.stateHash, input.codeVerifierCiphertext, input.redirectUri, input.expiresAt, this.#now()],
+    );
+    const row = result.rows[0];
+    if (!row) throw new Error("PostgreSQL did not return the OAuth transaction.");
+    return oauthTransactionFromRow(row);
+  }
+
+  async consumeGitHubOAuthTransaction(stateHash: string): Promise<GitHubOAuthTransaction | null> {
+    const result = await this.#pool.query<OAuthTransactionRow>(
+      `UPDATE github_oauth_transactions SET consumed_at = $2
+        WHERE state_hash = $1 AND consumed_at IS NULL AND expires_at > $2
+        RETURNING id, user_id, state_hash, code_verifier_ciphertext, redirect_uri, expires_at, consumed_at`, [stateHash, this.#now()],
+    );
+    return result.rows[0] ? oauthTransactionFromRow(result.rows[0]) : null;
+  }
+
+  async getGitHubIdentity(userId: string): Promise<GitHubIdentity | null> {
+    const result = await this.#pool.query<GithubIdentityRow>(
+      `SELECT user_id, provider_subject, login, linked_at FROM github_identities WHERE user_id = $1`, [userId],
+    );
+    return result.rows[0] ? githubIdentityFromRow(result.rows[0]) : null;
+  }
+
+  async linkGitHubIdentity(input: LinkGitHubIdentityInput): Promise<GitHubIdentity | "conflict"> {
+    try {
+      const result = await this.#pool.query<GithubIdentityRow>(
+        `INSERT INTO github_identities (user_id, provider_subject, login, linked_at)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (user_id) DO UPDATE SET provider_subject = EXCLUDED.provider_subject, login = EXCLUDED.login, linked_at = EXCLUDED.linked_at
+         RETURNING user_id, provider_subject, login, linked_at`, [input.userId, input.providerSubject, input.login, this.#now()],
+      );
+      const row = result.rows[0];
+      if (!row) throw new Error("PostgreSQL did not return the GitHub identity.");
+      return githubIdentityFromRow(row);
+    } catch (error) {
+      if (isUniqueViolation(error)) return "conflict";
+      throw error;
+    }
+  }
+
+  async replaceGitHubInstallationAccess(userId: string, installations: GitHubInstallationAccess[]): Promise<void> {
+    await this.#transaction(async (client) => {
+      const now = this.#now();
+      await client.query(`DELETE FROM github_user_installations WHERE user_id = $1`, [userId]);
+      for (const installation of installations) {
+        if (!/^\d+$/u.test(installation.id) || (installation.accountType !== "User" && installation.accountType !== "Organization")) {
+          throw new Error("GitHub returned an invalid installation access record.");
+        }
+        await client.query(
+          `INSERT INTO github_user_installations (user_id, installation_id, account_login, account_type, linked_at)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [userId, installation.id, installation.accountLogin, installation.accountType, now],
+        );
+        for (const repository of installation.repositories) {
+          if (!/^\d+$/u.test(repository.id)) throw new Error("GitHub returned an invalid repository access record.");
+          await client.query(
+            `INSERT INTO github_user_repositories
+              (user_id, installation_id, repository_id, owner, name, default_branch, private)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [userId, installation.id, repository.id, repository.owner, repository.name, repository.defaultBranch, repository.private],
+          );
+        }
+      }
+    });
+  }
+
+  async listGitHubInstallations(userId: string, notBefore: string): Promise<GitHubInstallation[]> {
+    const result = await this.#pool.query<GithubInstallationRow>(
+      `SELECT installation_id::text AS id, account_login, account_type
+         FROM github_user_installations WHERE user_id = $1 AND linked_at > $2 ORDER BY account_login, installation_id`, [userId, notBefore],
+    );
+    return result.rows.map((row) => ({ id: row.id, accountLogin: row.account_login, accountType: row.account_type }));
+  }
+
+  async listGitHubRepositories(userId: string, installationId: string, notBefore: string): Promise<GitHubRepository[]> {
+    const result = await this.#pool.query<GithubRepositoryRow>(
+      `SELECT repository_id::text AS id, owner, name, default_branch, private
+         FROM github_user_repositories
+        WHERE user_id = $1 AND installation_id = $2
+          AND EXISTS (SELECT 1 FROM github_user_installations WHERE user_id = $1 AND installation_id = $2 AND linked_at > $3)
+        ORDER BY owner, name`, [userId, installationId, notBefore],
+    );
+    return result.rows.map((row) => ({ id: row.id, owner: row.owner, name: row.name, defaultBranch: row.default_branch, private: row.private }));
   }
 
   async #upsertUser(client: PoolClient, actor: AuthenticatedActor, now: string): Promise<void> {

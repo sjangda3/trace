@@ -17,7 +17,7 @@ The guiding constraint is that the macOS app remains a real desktop IDE. Electro
 - `packages/collaboration-protocol` provides strict versioned room schemas, bounded validators, replay envelopes, and offline queue policy.
 - `services/control-plane` provides a standalone Fastify service for workspace identity, HMAC-hashed one-time invites, membership, initial control snapshots, and transactional PostgreSQL persistence.
 
-These are foundations, not deployed cloud collaboration. The control-plane executable has deliberately unsafe opt-in development auth; it is not connected to the desktop and is not a production account system. There is no room WebSocket, remote canonical document, sandbox worker, shared remote PTY, or GitHub write-sync service yet. The local `node-pty` process must never be exposed to an invited remote member.
+These are foundations, not deployed cloud collaboration. The control plane now has self-hosted email/password identity, verified accounts, rotating desktop sessions, GitHub OAuth identity linking, GitHub App repository selection, and email/copy-link invitations. There is still no room WebSocket, remote canonical document, sandbox worker, shared remote PTY, or GitHub write-sync service yet. The local `node-pty` process must never be exposed to an invited remote member.
 
 ### Future cloud work described here
 

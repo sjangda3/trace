@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "skills": {
+    "glsl-color": {
+      "source": "devallibus/shaderbase-skills",
+      "sourceType": "github",
+      "skillPath": "skills/glsl-color/SKILL.md",
+      "computedHash": "b03a27415fa9c29d66983337cc57ad6d9d92f4a800b8fa212cd7d080caebf1eb"
+    },
+    "glsl-coordinates": {
+      "source": "devallibus/shaderbase-skills",
+      "sourceType": "github",
+      "skillPath": "skills/glsl-coordinates/SKILL.md",
+      "computedHash": "6e7038eaf573e5ab8158f986b2f460f31ab6bf5fafe80dd718fb247c7b8ecc8c"
+    },
+    "glsl-fundamentals": {
+      "source": "devallibus/shaderbase-skills",
+      "sourceType": "github",
+      "skillPath": "skills/glsl-fundamentals/SKILL.md",
+      "computedHash": "bde0ab1015733bda3b900131a886c255c253d8a61cfed61cf32ffe6d562d26c7"
+    },
+    "glsl-math": {
+      "source": "devallibus/shaderbase-skills",
+      "sourceType": "github",
+      "skillPath": "skills/glsl-math/SKILL.md",
+      "computedHash": "02014f348afc16bb929b8046a07c2b38dfded6a34784e6c2d84363c9e7381396"
+    },
+    "glsl-noise": {
+      "source": "devallibus/shaderbase-skills",
+      "sourceType": "github",
+      "skillPath": "skills/glsl-noise/SKILL.md",
+      "computedHash": "c30df3c7d2b7a66aff1b6d870c602a4403e4bee0d5d018fbb780c3890d7bf1ff"
+    },
+    "glsl-sdf": {
+      "source": "devallibus/shaderbase-skills",
+      "sourceType": "github",
+      "skillPath": "skills/glsl-sdf/SKILL.md",
+      "computedHash": "df00d05f9b35941a24601aa95d0afd58fe53e4523ab389c772104eaba9079f64"
+    },
+    "shaderbase-manifest": {
+      "source": "devallibus/shaderbase-skills",
+      "sourceType": "github",
+      "skillPath": "skills/shaderbase-manifest/SKILL.md",
+      "computedHash": "a4c4661c8d09b9f5bbaca6e62d544a87b0f421adb91298ed88bf1937f645bc09"
+    },
+    "shaderbase-recipes": {
+      "source": "devallibus/shaderbase-skills",
+      "sourceType": "github",
+      "skillPath": "skills/shaderbase-recipes/SKILL.md",
+      "computedHash": "4931135a82a6f9e0bf19346c04495a5497945459da0bbe51c760c3a11fd6465a"
+    }
+  }
+}

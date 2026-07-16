@@ -1,6 +1,6 @@
 # Trace control plane
 
-This directory is an independently runnable first slice of the provider-neutral Trace cloud control plane within the Trace repository. It owns workspace identity, membership, one-time invitations, and REST bootstrap state. It does not expose local filesystem paths or local macOS terminals.
+This directory is the provider-neutral Trace cloud control plane within the Trace repository. It owns account identity, rotating device sessions, GitHub identity links, workspace membership, one-time invitations, and REST bootstrap state. It does not expose local filesystem paths or local macOS terminals.
 
 ## What is included
 
@@ -12,6 +12,10 @@ This directory is an independently runnable first slice of the provider-neutral 
 - Atomic invite redemption, membership limits, role checks, and workspace enumeration resistance.
 - A narrow adapter that maps repository-bound bootstrap state to the shared collaboration protocol and validates every emitted snapshot envelope.
 - Black-box HTTP and repository tests using Fastify injection and the Node.js test runner.
+- Self-hosted email/password accounts with Argon2id password hashes, expiring one-time verification/reset tokens, HMAC-hashed refresh tokens, and access-token/session checks on every authenticated request.
+- Resend delivery through a provider boundary, with deterministic in-memory delivery used by tests.
+- Browser-based GitHub OAuth with state validation and PKCE; only the linked GitHub identity is retained. The desktop's local GitHub credential is never sent to this service.
+- GitHub App installation/repository selection through a cloud-side broker. The private key and installation credentials remain server-side.
 
 The legacy-named `/room-snapshot` route contains workspace metadata, members, and the initial fenced code-control record. It is a REST bootstrap response, not a collaboration-protocol `SnapshotEnvelope`. WebSockets, room event mutation, presence, worker scheduling, and sandbox provisioning are deliberately outside this slice.
 
@@ -37,7 +41,7 @@ TEST_DATABASE_URL="postgresql://trace:password@127.0.0.1/trace_test" \
 npm run test:postgres
 ```
 
-## Local in-memory run
+## Local development run
 
 The executable refuses to start an in-memory repository or development authentication unless each is explicitly enabled:
 
@@ -48,7 +52,7 @@ TRACE_ENABLE_DEV_AUTH=1 \
 npm start
 ```
 
-It listens on `127.0.0.1:8787` by default. Development credentials use `Authorization: Bearer dev:<user-id>`. They have no signature and must never be exposed on a public interface.
+It listens on `127.0.0.1:8787` by default. Development credentials use `Authorization: Bearer dev:<user-id>`. They have no signature and must never be exposed on a public interface. Development bearer auth deliberately bypasses the account routes; use the test suite for deterministic account-flow coverage.
 
 ## PostgreSQL run
 
@@ -77,15 +81,52 @@ npm start
 
 Run migrations before starting a new application version. Applied migration checksums are stored in `control_plane_schema_migrations`; never edit an applied migration. Add a new numbered migration instead.
 
-The library entry point is `buildApp`. A production composition must inject a real `AuthProvider`, `PostgresControlPlaneRepository`, and stable `InviteTokenCodec`, then terminate TLS at a trusted edge. The included executable intentionally supports only the visibly unsafe development bearer provider so it cannot be mistaken for a production identity implementation.
+## Production account configuration
+
+Run migrations first, terminate TLS at a trusted edge, and provide these values through your secret manager—not the desktop renderer or repository:
+
+```bash
+DATABASE_URL=postgresql://trace:password@db/trace
+TRACE_PUBLIC_URL=https://trace.example.com
+TRACE_INVITE_TOKEN_PEPPER='<base64 32+ byte secret>'
+TRACE_ACCESS_TOKEN_SIGNING_KEY='<base64 32+ byte secret>'
+TRACE_REFRESH_TOKEN_PEPPER='<base64 32+ byte secret>'
+TRACE_ACTION_TOKEN_PEPPER='<base64 32+ byte secret>'
+TRACE_OAUTH_ENCRYPTION_KEY='<base64 exactly-32-byte secret>'
+TRACE_RESEND_API_KEY=re_...
+TRACE_RESEND_FROM='Trace <accounts@example.com>'
+TRACE_GITHUB_OAUTH_CLIENT_ID=... # the Trace GitHub App's Client ID
+TRACE_GITHUB_OAUTH_CLIENT_SECRET=... # the Trace GitHub App's client secret
+TRACE_GITHUB_OAUTH_CALLBACK_URL=https://trace.example.com/v1/github/link/callback
+TRACE_GITHUB_APP_ID=...
+TRACE_GITHUB_APP_SLUG=trace
+TRACE_GITHUB_APP_PRIVATE_KEY='-----BEGIN PRIVATE KEY-----\n...'
+```
+
+`TRACE_GITHUB_OAUTH_CALLBACK_URL` defaults to the callback under `TRACE_PUBLIC_URL`. These OAuth values are the GitHub App's user-to-server web-flow credentials: Trace uses the short-lived GitHub user token only in the callback to verify accessible installations and repositories, then discards it. It retains the GitHub identity plus short-lived, non-secret access facts (10 minutes), never a GitHub or desktop credential. The executable accepts production account traffic only with PostgreSQL. `TRACE_ENABLE_DEV_AUTH=1` remains an explicitly local, loopback-only escape hatch.
+
+The Electron app additionally needs `TRACE_CONTROL_PLANE_URL=https://trace.example.com` at launch. Electron main stores the opaque refresh credential with `safeStorage`; the renderer receives only public account state and account commands.
 
 ## REST API
 
 | Method | Path | Access | Purpose |
 | --- | --- | --- | --- |
 | `GET` | `/health` | Public | Repository-backed readiness check. |
+| `POST` | `/v1/auth/sign-up` | Public | Create an email/password account and send verification email. |
+| `POST` | `/v1/auth/sign-in` | Public | Start a rotating desktop session. |
+| `POST` | `/v1/auth/verify-email` | Public | Consume an expiring verification token. |
+| `POST` | `/v1/auth/resend-verification` | Public | Generic resend response, rate limited. |
+| `POST` | `/v1/auth/request-password-reset` | Public | Generic reset response, rate limited. |
+| `POST` | `/v1/auth/confirm-password-reset` | Public | Consume reset token, replace password, revoke sessions. |
+| `POST` | `/v1/auth/refresh` | Public | Rotate a desktop refresh session. |
+| `POST` | `/v1/auth/sign-out` | Public | Revoke the supplied device refresh session. |
+| `GET` | `/v1/auth/session` | Access token | Read public account/session state. |
+| `POST` | `/v1/github/link/start` | Verified user | Start browser OAuth with PKCE. |
+| `GET` | `/v1/github/link/callback` | Public | Validate state, exchange code, and retain GitHub identity/access facts without a credential. |
+| `GET` | `/v1/github/app/installations` | Verified linked user | List GitHub App installations accessible to that user. |
+| `GET` | `/v1/github/app/installations/:id/repositories` | Verified linked user | List repositories available to that installation. |
 | `POST` | `/v1/workspaces` | Authenticated | Create a workspace; caller becomes owner. An optional GitHub repository binding makes protocol snapshots possible. |
-| `POST` | `/v1/workspaces/:workspaceId/invites` | Owner | Create a one-time member invite. |
+| `POST` | `/v1/workspaces/:workspaceId/invites` | Owner | Create an email-addressed one-time member invite and copyable link. |
 | `POST` | `/v1/invites/redeem` | Authenticated | Atomically consume an invite and join its workspace. |
 | `GET` | `/v1/workspaces/:workspaceId/members` | Member | List invited workspace members. |
 | `GET` | `/v1/workspaces/:workspaceId/room-snapshot` | Member | Read the legacy-named REST bootstrap response. |
@@ -141,7 +182,8 @@ Errors have one stable shape and do not expose validator or database details:
 
 - Request bodies are limited to 16 KiB and reject unknown JSON fields.
 - Workspace names contain 1–80 characters after trimming.
-- Invites live from 5 minutes to 7 days; the default is 24 hours.
+- Access tokens live for 15 minutes. Refresh sessions rotate and expire after 30 days; replaying an old refresh token revokes the session family.
+- Verification and reset links live for 24 hours. Invites live from 5 minutes to 7 days; the default is 7 days.
 - A workspace has at most 20 active invites and 50 members in this slice.
 - Memberships have stable room member IDs distinct from account user IDs; the REST response intentionally continues to expose only the existing user-facing member fields.
 - Only an owner can create an invite. An invite grants `member`, never `owner`.
@@ -154,4 +196,4 @@ Errors have one stable shape and do not expose validator or database details:
 
 ## Production boundary
 
-Before public deployment, provide the account/device authentication module described in `docs/CLOUD_ARCHITECTURE.md`, terminate TLS, apply per-identity rate limits, configure PostgreSQL TLS and backups, place the invite pepper in KMS-backed secret storage, and connect audit/telemetry sinks. Do not use the development bearer provider as a temporary public authentication system.
+Before public deployment, configure PostgreSQL TLS/backups, place the signing keys and peppers in KMS-backed secret storage, provision the verified Resend sender and GitHub callback domain, apply a shared edge rate limiter, and connect audit/telemetry sinks. Do not use the development bearer provider as a temporary public authentication system.

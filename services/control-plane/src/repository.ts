@@ -8,6 +8,21 @@ import type {
   WorkspaceBootstrapState,
   WorkspaceMember,
 } from "./domain.js";
+import type {
+  AccountUser,
+  AuthTokenKind,
+  CreateAccountInput,
+  CreateDeviceSessionInput,
+  CreateOneTimeTokenInput,
+  DeviceSession,
+  DeviceSessionRotation,
+  GitHubIdentity,
+  GitHubOAuthTransaction,
+  LinkGitHubIdentityInput,
+  RotateDeviceSessionInput,
+  StoredAccount,
+} from "./accounts.js";
+import type { GitHubInstallation, GitHubInstallationAccess, GitHubRepository } from "./github-auth.js";
 
 export const MAX_WORKSPACE_MEMBERS = 50;
 export const MAX_ACTIVE_INVITES = 20;
@@ -78,6 +93,7 @@ export type CreateWorkspaceInput = {
   name: string;
   actor: AuthenticatedActor;
   repository?: RepositoryBinding;
+  githubInstallationId?: string;
 };
 
 export type CreateInviteInput = {
@@ -85,12 +101,15 @@ export type CreateInviteInput = {
   actor: AuthenticatedActor;
   tokenHash: string;
   expiresInSeconds: number;
+  recipientEmail?: string;
 };
 
 export type RedeemInviteInput = {
   tokenHash: string;
   actor: AuthenticatedActor;
 };
+
+export type CreateGitHubOAuthTransactionInput = Omit<GitHubOAuthTransaction, "id" | "consumedAt">;
 
 export interface ControlPlaneRepository {
   health(): Promise<void>;
@@ -106,4 +125,23 @@ export interface ControlPlaneRepository {
   getWorkspaceBootstrapState(workspaceId: string): Promise<WorkspaceBootstrapState | null>;
   /** @deprecated Use getWorkspaceBootstrapState and project the REST fields explicitly. */
   getRoomSnapshotState(workspaceId: string): Promise<RoomSnapshotState | null>;
+  createAccount(input: CreateAccountInput): Promise<AccountUser | null>;
+  getAccountByEmail(email: string): Promise<StoredAccount | null>;
+  getAccountById(userId: string): Promise<StoredAccount | null>;
+  replacePassword(userId: string, passwordHash: string): Promise<boolean>;
+  markEmailVerified(userId: string): Promise<AccountUser | null>;
+  createOneTimeToken(input: CreateOneTimeTokenInput): Promise<void>;
+  consumeOneTimeToken(kind: AuthTokenKind, tokenHash: string): Promise<AccountUser | null>;
+  createDeviceSession(input: CreateDeviceSessionInput): Promise<DeviceSession>;
+  rotateDeviceSession(input: RotateDeviceSessionInput): Promise<DeviceSessionRotation>;
+  revokeDeviceSession(refreshTokenHash: string): Promise<void>;
+  isDeviceSessionActive(sessionId: string, userId: string): Promise<boolean>;
+  revokeAllDeviceSessions(userId: string): Promise<void>;
+  createGitHubOAuthTransaction(input: CreateGitHubOAuthTransactionInput): Promise<GitHubOAuthTransaction>;
+  consumeGitHubOAuthTransaction(stateHash: string): Promise<GitHubOAuthTransaction | null>;
+  getGitHubIdentity(userId: string): Promise<GitHubIdentity | null>;
+  linkGitHubIdentity(input: LinkGitHubIdentityInput): Promise<GitHubIdentity | "conflict">;
+  replaceGitHubInstallationAccess(userId: string, installations: GitHubInstallationAccess[]): Promise<void>;
+  listGitHubInstallations(userId: string, notBefore: string): Promise<GitHubInstallation[]>;
+  listGitHubRepositories(userId: string, installationId: string, notBefore: string): Promise<GitHubRepository[]>;
 }

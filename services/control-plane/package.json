@@ -11,17 +11,18 @@
     }
   },
   "engines": {
-    "node": ">=20.10.0"
+    "node": ">=20.19.0"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build && node --test dist/test/app.node.js dist/test/in-memory-repository.node.js dist/test/invite-token.node.js dist/test/protocol-adapter.node.js",
+    "test": "npm run build && node --test dist/test/app.node.js dist/test/accounts.node.js dist/test/in-memory-repository.node.js dist/test/invite-token.node.js dist/test/protocol-adapter.node.js",
     "test:postgres": "npm run build && node --test dist/test/postgres-repository.integration.node.js",
     "start": "node dist/src/server.js",
     "migrate": "node dist/src/migrate.js"
   },
   "dependencies": {
+    "@noble/hashes": "^2.2.0",
     "@trace/collaboration-protocol": "file:../../packages/collaboration-protocol",
     "fastify": "^5.10.0",
     "pg": "^8.22.0"

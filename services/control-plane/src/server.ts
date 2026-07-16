@@ -1,8 +1,12 @@
 import { randomBytes } from "node:crypto";
 import { Pool } from "pg";
+import { AccountService } from "./account-service.js";
 import { buildApp } from "./app.js";
-import { DevBearerAuthProvider } from "./auth.js";
+import { AccessTokenCodec, SecretBox, TokenHasher } from "./accounts.js";
+import { DevBearerAuthProvider, TraceAccessTokenAuthProvider } from "./auth.js";
+import { GitHubAppApiBroker, GitHubOAuthWebClient } from "./github-auth.js";
 import { InviteTokenCodec } from "./invite-token.js";
+import { ResendAccountMailer } from "./mailer.js";
 import { InMemoryControlPlaneRepository } from "./repositories/in-memory.js";
 import { PostgresControlPlaneRepository } from "./repositories/postgres.js";
 
@@ -33,12 +37,14 @@ function configuredPepper(databaseEnabled: boolean): Buffer {
   return pepper;
 }
 
+function requiredEnvironment(name: string): string {
+  const value = process.env[name]?.trim();
+  if (!value) throw new Error(`${name} is required for production account authentication.`);
+  return value;
+}
+
 async function main(): Promise<void> {
-  if (process.env.TRACE_ENABLE_DEV_AUTH !== "1") {
-    throw new Error(
-      "This slice ships only development authentication. Set TRACE_ENABLE_DEV_AUTH=1 explicitly or embed buildApp with a production AuthProvider.",
-    );
-  }
+  const developmentAuth = process.env.TRACE_ENABLE_DEV_AUTH === "1";
 
   const connectionString = process.env.DATABASE_URL;
   const useMemory = process.env.TRACE_IN_MEMORY === "1";
@@ -60,11 +66,47 @@ async function main(): Promise<void> {
   const repository = pool
     ? new PostgresControlPlaneRepository(pool)
     : new InMemoryControlPlaneRepository();
+  let authProvider;
+  let accounts: AccountService | undefined;
+  if (developmentAuth) {
+    authProvider = new DevBearerAuthProvider();
+  } else {
+    if (!pool) throw new Error("Production account authentication requires DATABASE_URL; TRACE_IN_MEMORY is development-only.");
+    const publicUrl = requiredEnvironment("TRACE_PUBLIC_URL");
+    const accessTokens = new AccessTokenCodec(requiredEnvironment("TRACE_ACCESS_TOKEN_SIGNING_KEY"));
+    const oauth = new GitHubOAuthWebClient({
+      clientId: requiredEnvironment("TRACE_GITHUB_OAUTH_CLIENT_ID"),
+      clientSecret: requiredEnvironment("TRACE_GITHUB_OAUTH_CLIENT_SECRET"),
+      callbackUrl: process.env.TRACE_GITHUB_OAUTH_CALLBACK_URL?.trim() || new URL("/v1/github/link/callback", publicUrl).toString(),
+    });
+    const githubApp = new GitHubAppApiBroker({
+      appId: requiredEnvironment("TRACE_GITHUB_APP_ID"),
+      privateKey: requiredEnvironment("TRACE_GITHUB_APP_PRIVATE_KEY").replace(/\\n/g, "\n"),
+      slug: requiredEnvironment("TRACE_GITHUB_APP_SLUG"),
+    });
+    accounts = new AccountService({
+      repository,
+      accessTokens,
+      refreshTokens: new TokenHasher(requiredEnvironment("TRACE_REFRESH_TOKEN_PEPPER")),
+      actionTokens: new TokenHasher(requiredEnvironment("TRACE_ACTION_TOKEN_PEPPER")),
+      mailer: new ResendAccountMailer({ apiKey: requiredEnvironment("TRACE_RESEND_API_KEY"), from: requiredEnvironment("TRACE_RESEND_FROM") }),
+      publicUrl,
+      oauth: { client: oauth, secretBox: new SecretBox(requiredEnvironment("TRACE_OAUTH_ENCRYPTION_KEY")), callbackUrl: process.env.TRACE_GITHUB_OAUTH_CALLBACK_URL?.trim() || new URL("/v1/github/link/callback", publicUrl).toString() },
+      githubApp,
+    });
+    authProvider = new TraceAccessTokenAuthProvider({ accessTokens, repository });
+  }
   const app = buildApp({
     repository,
-    authProvider: new DevBearerAuthProvider(),
+    authProvider,
     inviteTokens: new InviteTokenCodec(configuredPepper(Boolean(pool))),
-    logger: true,
+    ...(accounts ? { accounts, requireGitHubRepositoryBinding: true, requireInviteEmail: true } : {}),
+    logger: {
+      redact: {
+        paths: ["req.headers.authorization", "req.headers.cookie", "req.url"],
+        censor: "[redacted]",
+      },
+    },
   });
 
   if (pool) {
@@ -84,11 +126,11 @@ async function main(): Promise<void> {
   process.once("SIGTERM", () => void close("SIGTERM"));
 
   const host = process.env.HOST?.trim() || "127.0.0.1";
-  if (!new Set(["127.0.0.1", "::1", "localhost"]).has(host)) {
-    throw new Error("The development-auth executable may listen only on a loopback host.");
+  if (developmentAuth && !new Set(["127.0.0.1", "::1", "localhost"]).has(host)) {
+    throw new Error("Development bearer authentication may listen only on a loopback host.");
   }
   await app.listen({ host, port: boundedPort(process.env.PORT) });
-  app.log.warn("Development bearer authentication is enabled; do not expose this process publicly.");
+  if (developmentAuth) app.log.warn("Development bearer authentication is enabled; do not expose this process publicly.");
 }
 
 main().catch((error: unknown) => {

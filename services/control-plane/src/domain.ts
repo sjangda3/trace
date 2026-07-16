@@ -4,6 +4,8 @@ export type WorkspaceState = "created";
 export type AuthenticatedActor = {
   userId: string;
   displayName: string;
+  email?: string;
+  emailVerified?: boolean;
 };
 
 export type RepositoryBinding = {
@@ -40,6 +42,7 @@ export type InviteMetadata = {
   createdByUserId: string;
   createdAt: string;
   expiresAt: string;
+  recipientEmail: string | null;
 };
 
 export type CodeControl = {
