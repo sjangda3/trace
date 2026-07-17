@@ -1,22 +1,73 @@
-import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  AnimatePresence,
+  motion,
+  useIsPresent,
+  useReducedMotion,
+} from "motion/react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from "react";
 import { ArrowLeft, Check, ChevronLeft, FolderOpen, GitFork } from "lucide-react";
 import { traceAccountApi, TraceAccountError } from "./api";
 import {
-  OpeningShaderBackground,
-  type OpeningTransitionDirection,
-  type OpeningTransitionTarget,
-} from "./OpeningShaderBackground";
+  canUpdateOpeningPointer,
+  OpeningArrowBackground,
+  type OpeningArrowBackgroundHandle,
+} from "./OpeningArrowBackground";
 import type { CloudRepository, GitHubAppInstallation, TraceAccount } from "./types";
-import { afterVerificationRefresh, type OnboardingIntent, type OnboardingScreen } from "./onboarding-state";
+import {
+  afterVerificationRefresh,
+  nextForAccount,
+  type OnboardingIntent,
+  type OnboardingScreen,
+} from "./onboarding-state";
 
 type Screen = OnboardingScreen | "reset-request" | "reset-confirm" | "repository" | "workspace" | "invite" | "complete";
 type Intent = OnboardingIntent;
-type ConcreteOpeningTarget = Exclude<OpeningTransitionTarget, null>;
-type OpeningTransition = {
-  target: ConcreteOpeningTarget;
-  direction: OpeningTransitionDirection;
-};
+type OpeningScreen = Extract<Screen, "choice" | "sign-in" | "sign-up">;
+
+function isOpeningScreen(screen: Screen): screen is OpeningScreen {
+  return screen === "choice" || screen === "sign-in" || screen === "sign-up";
+}
+
+function OpeningView({
+  children,
+  onEntered,
+}: {
+  children: ReactNode;
+  onEntered: () => void;
+}) {
+  const isPresent = useIsPresent();
+  const reducedMotion = useReducedMotion();
+
+  return (
+    <motion.div
+      className="onboarding-opening-view"
+      data-present={isPresent ? "true" : "false"}
+      inert={isPresent ? undefined : true}
+      aria-hidden={isPresent ? undefined : true}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={reducedMotion
+        ? { duration: 0.02 }
+        : isPresent
+          ? { duration: 0.16, delay: 0.06, ease: "easeOut" }
+          : { duration: 0.12, ease: "easeIn" }}
+      onAnimationComplete={() => {
+        if (isPresent) onEntered();
+      }}
+    >
+      {children}
+    </motion.div>
+  );
+}
 
 function errorText(error: unknown): string {
   if (error instanceof TraceAccountError) return error.message;
@@ -107,6 +158,7 @@ export function Onboarding({ onContinueLocal }: { onContinueLocal: () => void })
   const [account, setAccount] = useState<TraceAccount | null>(null);
   const [availability, setAvailability] = useState<"loading" | "ready" | "not-configured">(api ? "loading" : "not-configured");
   const [message, setMessage] = useState<string | null>(null);
+  const [loginError, setLoginError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -122,26 +174,32 @@ export function Onboarding({ onContinueLocal }: { onContinueLocal: () => void })
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [pendingInvite, setPendingInvite] = useState(false);
   const [pendingPasswordReset, setPendingPasswordReset] = useState(false);
-  const [openingTransition, setOpeningTransition] = useState<OpeningTransition | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
-  const onboardingRef = useRef<HTMLElement>(null);
+  const openingArrowRef = useRef<OpeningArrowBackgroundHandle>(null);
+  const loginButtonRef = useRef<HTMLButtonElement>(null);
+  const emailInputRef = useRef<HTMLInputElement>(null);
+  const passwordInputRef = useRef<HTMLInputElement>(null);
+  const signupHeadingRef = useRef<HTMLHeadingElement>(null);
+  const restoreChoiceFocusRef = useRef(false);
+  const signInPendingRef = useRef(false);
 
   const cloudReady = availability === "ready" && Boolean(api);
   const details = useMemo(() => screenDetails(screen), [screen]);
   const activeStep = activeStepFor(screen);
-  const screenOpeningTarget: ConcreteOpeningTarget | null = screen === "sign-in"
-    ? "login"
-    : screen === "sign-up"
-      ? "signup"
-      : null;
-  const activeOpeningTarget = openingTransition?.target ?? screenOpeningTarget;
-  const activeOpeningDirection = openingTransition?.direction ?? "forward";
-  const isOpeningCanvas = screen === "choice" || Boolean(screenOpeningTarget) || Boolean(openingTransition);
+  const isOpeningCanvas = isOpeningScreen(screen);
+  const openingStatusMessage = availability === "loading"
+    ? "Checking the Trace account service…"
+    : availability === "not-configured"
+      ? message ?? "Trace accounts are not configured on this Mac."
+      : message;
+  const loginDescriptionIds = [
+    openingStatusMessage ? "opening-login-status" : null,
+    loginError ? "opening-login-error" : null,
+  ].filter(Boolean).join(" ") || undefined;
 
   useEffect(() => {
-    if (screenOpeningTarget) onboardingRef.current?.focus();
-    else if (screen !== "choice") headingRef.current?.focus();
-  }, [screen, screenOpeningTarget]);
+    if (!isOpeningCanvas) headingRef.current?.focus();
+  }, [isOpeningCanvas, screen]);
 
   useEffect(() => {
     if (!api) return;
@@ -156,7 +214,8 @@ export function Onboarding({ onContinueLocal }: { onContinueLocal: () => void })
       } else if (pending.pending) {
         setIntent("invitee");
         setScreen(state.user ? "redeem" : "sign-in");
-        setMessage("A Trace invitation is ready. Sign in or create an account to join it.");
+        setLoginError(null);
+        setMessage("A Trace invitation is ready. Sign in to join it.");
       } else {
         setMessage(state.message);
       }
@@ -170,7 +229,8 @@ export function Onboarding({ onContinueLocal }: { onContinueLocal: () => void })
         setPendingInvite(true);
         setIntent("invitee");
         setScreen(account ? "redeem" : "sign-in");
-        setMessage("A Trace invitation is ready. Sign in or create an account to join it.");
+        setLoginError(null);
+        setMessage("A Trace invitation is ready. Sign in to join it.");
       }
       if (event.kind === "password-reset") {
         setPendingPasswordReset(true);
@@ -221,94 +281,268 @@ export function Onboarding({ onContinueLocal }: { onContinueLocal: () => void })
     setScreen("repository");
   };
 
+  const focusOpeningView = useCallback((openingScreen: OpeningScreen) => {
+    if (openingScreen === "choice") {
+      if (restoreChoiceFocusRef.current) loginButtonRef.current?.focus();
+      restoreChoiceFocusRef.current = false;
+      return;
+    }
+    if (openingScreen === "sign-in") {
+      const target = emailInputRef.current?.value
+        ? passwordInputRef.current
+        : emailInputRef.current;
+      target?.focus();
+      return;
+    }
+    signupHeadingRef.current?.focus();
+  }, []);
+
   const returnToStart = () => {
     setIntent("owner");
     setMessage(null);
-    setOpeningTransition(null);
+    setLoginError(null);
+    setPassword("");
+    restoreChoiceFocusRef.current = true;
+    openingArrowRef.current?.clearPointer();
     setScreen("choice");
   };
 
-  const beginOpeningTransition = (target: ConcreteOpeningTarget) => {
-    if (openingTransition) return;
+  const beginOpeningScreen = (nextScreen: "sign-in" | "sign-up") => {
     setIntent("owner");
     setMessage(null);
-    setOpeningTransition({ target, direction: "forward" });
+    setLoginError(null);
+    openingArrowRef.current?.clearPointer();
+    setScreen(nextScreen);
   };
 
-  const beginOpeningReturnTransition = () => {
-    if (!screenOpeningTarget || openingTransition) return;
+  const returnToOpeningChoice = useCallback(() => {
+    if (busy) return;
     setIntent("owner");
     setMessage(null);
-    setOpeningTransition({ target: screenOpeningTarget, direction: "reverse" });
-  };
+    setLoginError(null);
+    setPassword("");
+    restoreChoiceFocusRef.current = true;
+    openingArrowRef.current?.clearPointer();
+    setScreen("choice");
+  }, [busy]);
 
-  const finishOpeningTransition = (target: ConcreteOpeningTarget, direction: OpeningTransitionDirection) => {
-    setOpeningTransition(null);
-    if (direction === "reverse") {
-      setScreen("choice");
-      return;
+  const submitSignIn = async () => {
+    if (!api || !cloudReady || signInPendingRef.current) return;
+    signInPendingRef.current = true;
+    setBusy(true);
+    setLoginError(null);
+    try {
+      const result = await api.signIn({ email, password });
+      setAccount(result.user);
+      setPassword("");
+      setMessage(null);
+      setScreen(nextForAccount(result.user, intent));
+    } catch (error) {
+      setLoginError(errorText(error));
+    } finally {
+      signInPendingRef.current = false;
+      setBusy(false);
     }
-    setScreen(target === "login" ? "sign-in" : "sign-up");
+  };
+
+  const beginPasswordReset = () => {
+    if (busy) return;
+    setPassword("");
+    setLoginError(null);
+    setMessage(null);
+    setScreen("reset-request");
   };
 
   useEffect(() => {
-    if (!screenOpeningTarget) return;
+    if (screen === "choice") return;
+    openingArrowRef.current?.clearPointer();
+  }, [screen]);
+
+  useEffect(() => {
+    if (screen !== "sign-in" && screen !== "sign-up") return;
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || openingTransition) return;
-      setIntent("owner");
-      setMessage(null);
-      setOpeningTransition({ target: screenOpeningTarget, direction: "reverse" });
+      if (event.key !== "Escape" || busy) return;
+      returnToOpeningChoice();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [openingTransition, screenOpeningTarget]);
+  }, [busy, returnToOpeningChoice, screen]);
+
+  const handleOpeningPointerMove = (event: ReactPointerEvent<HTMLElement>) => {
+    if (event.pointerType === "pen" && event.pressure > 0) {
+      openingArrowRef.current?.clearPointer();
+      return;
+    }
+    if (!canUpdateOpeningPointer(
+      screen === "choice",
+      event.pointerType,
+      event.pressure,
+    )) return;
+    openingArrowRef.current?.updatePointer({
+      x: event.clientX,
+      y: event.clientY,
+    });
+  };
+
+  const handleOpeningPointerDown = (event: ReactPointerEvent<HTMLElement>) => {
+    if (event.pointerType === "pen" && event.pressure > 0) {
+      openingArrowRef.current?.clearPointer();
+    }
+  };
 
   return (
     <section
-      ref={onboardingRef}
       className={`onboarding${isOpeningCanvas ? " onboarding--opening" : ""}`}
       data-onboarding-screen={screen}
-      data-wave-target={activeOpeningTarget ?? undefined}
-      data-wave-transition={openingTransition?.direction === "reverse" ? "reverse" : undefined}
-      aria-label={screenOpeningTarget === "login" ? "Login" : screenOpeningTarget === "signup" ? "Sign up" : undefined}
-      aria-labelledby={isOpeningCanvas ? undefined : "onboarding-title"}
-      tabIndex={screenOpeningTarget ? -1 : undefined}
+      aria-label={screen === "choice" ? "Trace account access" : undefined}
+      aria-labelledby={screen === "sign-in"
+        ? "opening-sign-in-title"
+        : screen === "sign-up"
+          ? "opening-signup-title"
+          : isOpeningCanvas
+            ? undefined
+            : "onboarding-title"}
+      onPointerMove={screen === "choice" ? handleOpeningPointerMove : undefined}
+      onPointerDown={screen === "choice" ? handleOpeningPointerDown : undefined}
+      onPointerLeave={screen === "choice"
+        ? () => openingArrowRef.current?.clearPointer()
+        : undefined}
     >
-      {isOpeningCanvas ? <OpeningShaderBackground
-        transitionTarget={activeOpeningTarget}
-        transitionDirection={activeOpeningDirection}
-        onTransitionComplete={finishOpeningTransition}
-      /> : null}
-      {screenOpeningTarget ? <button
-        type="button"
-        className="onboarding-opening-back"
-        disabled={Boolean(openingTransition)}
-        onClick={beginOpeningReturnTransition}
-      >
-        <ArrowLeft aria-hidden="true" />
-        <span>Back</span>
-      </button> : null}
-      {screen === "choice" ? <div
-        className={`onboarding-opening-actions${openingTransition ? " is-exiting" : ""}`}
-        aria-label="Account access"
-      >
-        <button
-          type="button"
-          className="onboarding-opening-action"
-          disabled={Boolean(openingTransition)}
-          onClick={() => beginOpeningTransition("login")}
+      {isOpeningCanvas ? <OpeningArrowBackground ref={openingArrowRef} /> : null}
+      {isOpeningScreen(screen) ? <AnimatePresence initial={false} mode="sync">
+        <OpeningView
+          key={screen}
+          onEntered={() => focusOpeningView(screen)}
         >
-          Login
-        </button>
-        <button
-          type="button"
-          className="onboarding-opening-action onboarding-opening-action--primary"
-          disabled={Boolean(openingTransition)}
-          onClick={() => beginOpeningTransition("signup")}
-        >
-          Sign up
-        </button>
-      </div> : null}
+          {screen !== "choice" ? <button
+            type="button"
+            className="onboarding-opening-back"
+            disabled={busy}
+            onClick={returnToOpeningChoice}
+          >
+            <ArrowLeft aria-hidden="true" />
+            <span>Back</span>
+          </button> : null}
+
+          {screen === "choice" ? <div
+            className="onboarding-opening-actions"
+            role="group"
+            aria-label="Account access"
+          >
+            <button
+              ref={loginButtonRef}
+              type="button"
+              className="onboarding-opening-action"
+              onClick={() => beginOpeningScreen("sign-in")}
+            >
+              Login
+            </button>
+            <button
+              type="button"
+              className="onboarding-opening-action onboarding-opening-action--primary"
+              onClick={() => beginOpeningScreen("sign-up")}
+            >
+              Sign up
+            </button>
+          </div> : null}
+
+          {screen === "sign-in" ? <form
+            className="onboarding-opening-form"
+            aria-labelledby="opening-sign-in-title"
+            aria-describedby={loginDescriptionIds}
+            aria-busy={busy}
+            onSubmit={(event) => {
+              event.preventDefault();
+              void submitSignIn();
+            }}
+          >
+            <h1 id="opening-sign-in-title">Sign in to Trace</h1>
+            <label htmlFor="opening-login-email">
+              Email
+              <input
+                ref={emailInputRef}
+                id="opening-login-email"
+                name="email"
+                required
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                autoCapitalize="none"
+                spellCheck={false}
+                disabled={busy}
+                value={email}
+                aria-describedby={loginDescriptionIds}
+                onChange={(event) => {
+                  setEmail(event.target.value);
+                  setLoginError(null);
+                }}
+              />
+            </label>
+            <label htmlFor="opening-login-password">
+              Password
+              <input
+                ref={passwordInputRef}
+                id="opening-login-password"
+                name="password"
+                required
+                type="password"
+                autoComplete="current-password"
+                disabled={busy}
+                value={password}
+                aria-describedby={loginDescriptionIds}
+                onChange={(event) => {
+                  setPassword(event.target.value);
+                  setLoginError(null);
+                }}
+              />
+            </label>
+            {openingStatusMessage ? <p
+              id="opening-login-status"
+              className="onboarding-opening-feedback"
+              role="status"
+              aria-live="polite"
+            >
+              {openingStatusMessage}
+            </p> : null}
+            {loginError ? <p
+              id="opening-login-error"
+              className="onboarding-opening-feedback onboarding-opening-feedback--error"
+              role="alert"
+            >
+              {loginError}
+            </p> : null}
+            <button
+              type="submit"
+              className="onboarding-opening-submit"
+              disabled={busy || !cloudReady}
+            >
+              {busy ? "Signing in…" : "Login"}
+            </button>
+            <button
+              type="button"
+              className="onboarding-opening-link"
+              disabled={busy}
+              onClick={beginPasswordReset}
+            >
+              Forgot password?
+            </button>
+          </form> : null}
+
+          {screen === "sign-up" ? <div
+            className="onboarding-opening-placeholder"
+            aria-labelledby="opening-signup-title"
+          >
+            <h1
+              ref={signupHeadingRef}
+              id="opening-signup-title"
+              tabIndex={-1}
+            >
+              Sign up
+            </h1>
+            <p>Sign up isn’t available yet.</p>
+          </div> : null}
+        </OpeningView>
+      </AnimatePresence> : null}
       {!isOpeningCanvas ? <motion.div className="onboarding-shell" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.14, ease: "easeOut" }}>
         <aside className="onboarding-rail" aria-label="Setup progress">
           <div className="onboarding-brand">
