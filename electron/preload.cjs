@@ -126,3 +126,8 @@ contextBridge.exposeInMainWorld("traceAccount", {
   confirmPendingPasswordReset: (request) => ipcRenderer.invoke("account:confirm-pending-password-reset", request),
   onDeepLink: (callback) => subscribe("account:deep-link", callback),
 });
+
+contextBridge.exposeInMainWorld("tracePreferences", {
+  get: () => ipcRenderer.invoke("preferences:get"),
+  set: (preferences) => ipcRenderer.invoke("preferences:set", preferences),
+});

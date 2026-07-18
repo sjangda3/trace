@@ -1,6 +1,7 @@
 import { LoaderCircle, Plus, Trash2, X } from "lucide-react";
 import { motion } from "motion/react";
 import type { ReactNode } from "react";
+import type { Accent, CodeSize, ResolvedAppearance } from "../preferences/types";
 import { XtermSurface } from "./XtermSurface";
 import { useTerminalSessions } from "./useTerminalSessions";
 
@@ -38,10 +39,16 @@ function DrawerIconButton({
 export function TerminalDrawer({
   open,
   terminal,
+  resolvedAppearance,
+  accent,
+  codeSize,
   onClose,
 }: {
   open: boolean;
   terminal: TerminalState;
+  resolvedAppearance: ResolvedAppearance;
+  accent: Accent;
+  codeSize: CodeSize;
   onClose: () => void;
 }) {
   const active = terminal.activeSession;
@@ -156,6 +163,9 @@ export function TerminalDrawer({
             session={session}
             active={session.id === terminal.activeSessionId}
             drawerOpen={open}
+            resolvedAppearance={resolvedAppearance}
+            accent={accent}
+            codeSize={codeSize}
             pendingAction={
               session.id === terminal.closingSessionId
                 ? "closing"

@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="The canonical design system and brandbook for Trace.">
+  <title>Trace — Design system &amp; brandbook</title>
+  <link rel="icon" href="../trace-frame.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="brandbook.css">
+  <script src="brandbook.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#content">Skip to content</a>
+
+  <aside class="sidebar" aria-label="Brandbook navigation">
+    <a class="brand-lockup" href="#overview" aria-label="Trace brandbook home">
+      <img src="../trace-frame.svg" alt="" width="28" height="28">
+      <span>Trace</span>
+      <small>01.0</small>
+    </a>
+    <p class="sidebar-kicker">Design system<br>&amp; brandbook</p>
+    <nav class="side-nav" aria-label="Sections">
+      <a href="#overview" aria-current="true"><span>01</span>Overview</a>
+      <a href="#principles"><span>02</span>Principles</a>
+      <a href="#logo"><span>03</span>Logo</a>
+      <a href="#color"><span>04</span>Color</a>
+      <a href="#type"><span>05</span>Typography</a>
+      <a href="#graphics"><span>06</span>Graphics</a>
+      <a href="#foundations"><span>07</span>Foundations</a>
+      <a href="#components"><span>08</span>Components</a>
+      <a href="#patterns"><span>09</span>Product patterns</a>
+      <a href="#voice"><span>10</span>Voice</a>
+      <a href="#accessibility"><span>11</span>Accessibility</a>
+    </nav>
+    <div class="sidebar-actions">
+      <button class="utility-button" type="button" data-theme-toggle aria-pressed="false">
+        <span class="theme-dot" aria-hidden="true"></span>
+        <span data-theme-label>Dark view</span>
+      </button>
+      <button class="utility-button" type="button" data-print>Print / PDF</button>
+      <a class="utility-button" href="tokens.json">Open tokens.json</a>
+    </div>
+  </aside>
+
+  <main id="content">
+    <section class="hero section-dark" id="overview" aria-labelledby="overview-title">
+      <img class="hero-field" src="assets/frame-field.svg" alt="" aria-hidden="true">
+      <div class="hero-topline">
+        <span>Trace identity system</span>
+        <span>Canonical reference · July 2026</span>
+      </div>
+      <div class="hero-copy">
+        <p class="eyebrow">Shared context. Explicit control.</p>
+        <h1 id="overview-title">A calm frame for<br>serious work.</h1>
+        <p>Trace is a local-first collaborative workbench. Its identity makes ownership, context, and recovery visible without competing with the work.</p>
+      </div>
+      <div class="hero-mark" aria-label="Trace Frame mark">
+        <svg viewBox="0 0 64 64" fill="currentColor" role="img" aria-labelledby="hero-mark-title">
+          <title id="hero-mark-title">Trace Frame</title>
+          <path d="M9 9h34v8H17v26H9z"></path>
+          <path d="M55 21v34H21v-8h26V21z"></path>
+          <path d="M25 25h14v6H31v8h-6z"></path>
+        </svg>
+      </div>
+      <dl class="hero-facts">
+        <div><dt>Character</dt><dd>Calm · precise · capable</dd></div>
+        <div><dt>Core mark</dt><dd>The Frame</dd></div>
+        <div><dt>Primary field</dt><dd>Cobalt → ice</dd></div>
+        <div><dt>Product stance</dt><dd>Local-first collaboration</dd></div>
+      </dl>
+    </section>
+
+    <section class="content-section" id="principles" aria-labelledby="principles-title">
+      <header class="section-heading">
+        <p class="section-number">02 / Principles</p>
+        <h2 id="principles-title">Quiet structure.<br>Visible agency.</h2>
+        <p>Trace feels dependable because the interface tells the truth: who owns control, what will happen, where files live, and how to recover.</p>
+      </header>
+      <div class="principle-grid">
+        <article class="principle-card"><span>01</span><h3>Make ownership visible</h3><p>Control, presence, and editability are persistent state—not surprise messages after an action.</p></article>
+        <article class="principle-card"><span>02</span><h3>Protect the work plane</h3><p>Chrome is compact and quiet. Color carries state and focus; content keeps the visual priority.</p></article>
+        <article class="principle-card"><span>03</span><h3>Structure before decoration</h3><p>Rails, frames, alignment, and spacing establish rhythm. Effects are restrained and purposeful.</p></article>
+        <article class="principle-card"><span>04</span><h3>Motion explains change</h3><p>Transitions connect cause and effect. Reduced-motion behavior preserves clarity without movement.</p></article>
+      </div>
+    </section>
+
+    <section class="content-section logo-section" id="logo" aria-labelledby="logo-title">
+      <header class="section-heading">
+        <p class="section-number">03 / Logo</p>
+        <h2 id="logo-title">The Frame is the identity.</h2>
+        <p>Two opposing corners hold a smaller shared frame. It suggests workspace, perspective, and mutual context without becoming an arrow or letterform.</p>
+      </header>
+
+      <div class="logo-construction panel">
+        <div class="construction-stage">
+          <svg viewBox="0 0 80 80" role="img" aria-labelledby="construction-title">
+            <title id="construction-title">Trace Frame on its 64-unit construction grid with 8-unit clear space</title>
+            <defs>
+              <pattern id="construction-small-grid" width="4" height="4" patternUnits="userSpaceOnUse">
+                <path d="M4 0H0V4" fill="none" stroke="currentColor" stroke-width=".25"></path>
+              </pattern>
+              <pattern id="construction-grid" width="8" height="8" patternUnits="userSpaceOnUse">
+                <rect width="8" height="8" fill="url(#construction-small-grid)"></rect>
+                <path d="M8 0H0V8" fill="none" stroke="currentColor" stroke-width=".5"></path>
+              </pattern>
+            </defs>
+            <rect width="80" height="80" fill="url(#construction-grid)" opacity=".3"></rect>
+            <g transform="translate(8 8)" fill="currentColor">
+              <path d="M9 9h34v8H17v26H9z"></path>
+              <path d="M55 21v34H21v-8h26V21z"></path>
+              <path d="M25 25h14v6H31v8h-6z"></path>
+            </g>
+            <rect x="8" y="8" width="64" height="64" fill="none" stroke="currentColor" stroke-dasharray="1 2" opacity=".8"></rect>
+          </svg>
+        </div>
+        <div class="construction-notes">
+          <div><strong>64</strong><span>unit canvas</span></div>
+          <div><strong>8</strong><span>unit clear space</span></div>
+          <div><strong>8</strong><span>unit primary stroke</span></div>
+          <div><strong>6</strong><span>unit inner stroke</span></div>
+          <p><strong>Preserve the geometry.</strong> Never redraw or compact the three paths. For a standalone image, write concise alt text. Beside the typeset name, use empty alt text. Inline SVGs need a unique title ID and <code>aria-labelledby</code>.</p>
+          <a class="button button-primary" href="../trace-frame.svg" download="trace-frame.svg">Download canonical SVG</a>
+        </div>
+      </div>
+
+      <div class="subsection-heading">
+        <div><p class="eyebrow">Applications</p><h3>One mark, three approved fields</h3></div>
+        <p>Use the mark in one flat color. Select the version with the strongest contrast for its field.</p>
+      </div>
+      <div class="logo-application-grid">
+        <figure class="logo-application on-ice"><img src="../trace-frame.svg" alt="Trace Frame in deep navy on ice"><figcaption>Monochrome · Deep navy on ice</figcaption></figure>
+        <figure class="logo-application on-navy"><img src="../trace-frame.svg" alt="Trace Frame reversed in white on deep navy"><figcaption>Reversed · White on deep navy</figcaption></figure>
+        <figure class="logo-application on-cobalt"><img src="../trace-frame.svg" alt="Trace Frame reversed in white on cobalt"><figcaption>Atmosphere · White on cobalt</figcaption></figure>
+      </div>
+
+      <div class="split-block">
+        <div>
+          <p class="eyebrow">Lockups</p>
+          <h3>Typeset the name. Do not draw it.</h3>
+          <p>The product name uses the system/SF stack at semibold weight. The mark and name may appear independently when context is already established.</p>
+        </div>
+        <div class="lockup-specimens">
+          <div class="lockup lockup-horizontal"><img src="../trace-frame.svg" alt=""><strong>Trace</strong></div>
+          <div class="lockup lockup-stacked"><img src="../trace-frame.svg" alt=""><strong>Trace</strong></div>
+          <div class="minimum-sizes" aria-label="Minimum logo sizes">
+            <span><img src="../trace-frame.svg" alt="Frame mark at 16 pixels" width="16" height="16">16 px UI minimum</span>
+            <span><img src="../trace-frame.svg" alt="Frame mark at 24 pixels" width="24" height="24">24 px compact / 6 mm print</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="subsection-heading"><div><p class="eyebrow">Usage</p><h3>Keep the frame intact</h3></div></div>
+      <div class="usage-grid">
+        <figure class="usage-card correct"><div><img src="../trace-frame.svg" alt=""></div><figcaption>Do use one color and generous clear space.</figcaption></figure>
+        <figure class="usage-card wrong"><div><img class="logo-distort" src="../trace-frame.svg" alt=""></div><figcaption>Do not stretch, rotate, or compact.</figcaption></figure>
+        <figure class="usage-card wrong"><div class="logo-effect"><img src="../trace-frame.svg" alt=""></div><figcaption>Do not add gradients, shadows, or outlines.</figcaption></figure>
+        <figure class="usage-card wrong"><div><img class="logo-crowded" src="../trace-frame.svg" alt=""></div><figcaption>Do not crowd the mark with content.</figcaption></figure>
+      </div>
+    </section>
+
+    <section class="content-section" id="color" aria-labelledby="color-title">
+      <header class="section-heading">
+        <p class="section-number">04 / Color</p>
+        <h2 id="color-title">Cobalt atmosphere.<br>Neutral work plane.</h2>
+        <p>The identity palette is fixed. Workbench accents belong to personal context and never replace corporate brand colors.</p>
+      </header>
+
+      <div class="token-header"><h3>Brand palette</h3><p>Fixed identity colors</p></div>
+      <div class="swatch-grid brand-swatches">
+        <article class="swatch" data-token="brand.deep-navy" style="--swatch:#062B68"><div></div><h4>Deep navy</h4><code>#062B68</code><button data-copy="#062B68" aria-label="Copy Deep navy value">Copy</button><span class="status implemented">Implemented</span></article>
+        <article class="swatch" data-token="brand.atmosphere-cobalt" style="--swatch:#2F6FE9"><div></div><h4>Atmosphere cobalt</h4><code>#2F6FE9</code><button data-copy="#2F6FE9" aria-label="Copy Atmosphere cobalt value">Copy</button><span class="status implemented">Implemented</span></article>
+        <article class="swatch" data-token="brand.interface-cobalt" style="--swatch:#5D86AE"><div></div><h4>Interface cobalt</h4><code>#5D86AE</code><button data-copy="#5D86AE" aria-label="Copy Interface cobalt value">Copy</button><span class="status implemented">Implemented</span></article>
+        <article class="swatch" data-token="brand.acrylic-blue" style="--swatch:#D2E5F3"><div></div><h4>Acrylic blue</h4><code>#D2E5F3</code><button data-copy="#D2E5F3" aria-label="Copy Acrylic blue value">Copy</button><span class="status extension">Extension</span></article>
+        <article class="swatch" data-token="brand.ice" style="--swatch:#F7F9FE"><div></div><h4>Ice</h4><code>#F7F9FE</code><button data-copy="#F7F9FE" aria-label="Copy Ice value">Copy</button><span class="status extension">Extension</span></article>
+      </div>
+
+      <div class="token-header"><h3>Workbench modes</h3><p>Neutral surfaces preserve code and content hierarchy</p></div>
+      <div class="mode-grid">
+        <article class="mode-card mode-light">
+          <div class="mode-window">
+            <div class="mode-sidebar"></div><div class="mode-editor"><span></span><span></span><span></span></div>
+          </div>
+          <div class="mode-tokens">
+            <span data-token="color.light.surface"><i style="--chip:#FDFDFC"></i>Surface <code>#FDFDFC</code></span>
+            <span data-token="color.light.text"><i style="--chip:#303438"></i>Text <code>#303438</code></span>
+          </div>
+        </article>
+        <article class="mode-card mode-dark">
+          <div class="mode-window">
+            <div class="mode-sidebar"></div><div class="mode-editor"><span></span><span></span><span></span></div>
+          </div>
+          <div class="mode-tokens">
+            <span data-token="color.dark.surface"><i style="--chip:#19232C"></i>Surface <code>#19232C</code></span>
+            <span data-token="color.dark.text"><i style="--chip:#E0E8EE"></i>Text <code>#E0E8EE</code></span>
+          </div>
+        </article>
+      </div>
+
+      <div class="token-header"><h3>Personalization accents</h3><p>Contextual, user-selectable, never corporate identity</p></div>
+      <div class="accent-table" role="table" aria-label="Workbench accent colors">
+        <div class="accent-row" role="row"><span role="cell" data-token="accent.cobalt"><i style="--chip:#5D86AE"></i>Cobalt <code>#5D86AE</code></span><span role="cell" data-token="accent.cobalt.action"><i style="--chip:#4F789F"></i>Action <code>#4F789F</code></span></div>
+        <div class="accent-row" role="row"><span role="cell" data-token="accent.violet"><i style="--chip:#806AB0"></i>Violet <code>#806AB0</code></span><span role="cell" data-token="accent.violet.action"><i style="--chip:#6D579C"></i>Action <code>#6D579C</code></span></div>
+        <div class="accent-row" role="row"><span role="cell" data-token="accent.teal"><i style="--chip:#3F8A87"></i>Teal <code>#3F8A87</code></span><span role="cell" data-token="accent.teal.action"><i style="--chip:#327572"></i>Action <code>#327572</code></span></div>
+        <div class="accent-row" role="row"><span role="cell" data-token="accent.amber"><i style="--chip:#A57A3C"></i>Amber <code>#A57A3C</code></span><span role="cell" data-token="accent.amber.action"><i style="--chip:#8D6730"></i>Action <code>#8D6730</code></span></div>
+        <div class="accent-row" role="row"><span role="cell" data-token="accent.rose"><i style="--chip:#AD6876"></i>Rose <code>#AD6876</code></span><span role="cell" data-token="accent.rose.action"><i style="--chip:#925665"></i>Action <code>#925665</code></span></div>
+      </div>
+      <aside class="callout"><strong>Accessible actions</strong><p>Use the darker action tone for solid buttons with white text. Existing base accents and muted text combinations that miss 4.5:1 remain documented migration targets.</p></aside>
+    </section>
+
+    <section class="content-section" id="type" aria-labelledby="type-title">
+      <header class="section-heading">
+        <p class="section-number">05 / Typography</p>
+        <h2 id="type-title">Compact, familiar,<br>built for attention.</h2>
+        <p>System typography keeps the workbench native and fast. IBM Plex Mono carries code when available, with a durable system-mono fallback.</p>
+      </header>
+      <div class="type-family-grid">
+        <article data-token="typography.family.sans"><span class="type-glyph">Aa</span><p class="eyebrow">Interface</p><h3>System / SF</h3><p>Controls, navigation, prose, labels, and typeset Trace lockups.</p><button data-copy="-apple-system, BlinkMacSystemFont, SF Pro Text, system-ui, Helvetica Neue, Arial, sans-serif">Copy stack</button></article>
+        <article class="mono" data-token="typography.family.mono"><span class="type-glyph">Aa</span><p class="eyebrow">Code</p><h3>IBM Plex Mono</h3><p>Editor, terminal, diffs, hashes, paths, timestamps, and token values.</p><button data-copy="IBM Plex Mono, SF Mono, Menlo, Monaco, ui-monospace, monospace">Copy stack</button></article>
+      </div>
+      <div class="type-scale panel">
+        <div data-token="typography.size.display"><span>Display / 48 / 0.98</span><p class="display-sample">Shared context.</p></div>
+        <div><span>Title / 30 / 1.08</span><p class="title-sample">A calm frame for serious work.</p></div>
+        <div><span>Heading / 18 / 1.25</span><p class="heading-sample">Ownership stays visible</p></div>
+        <div data-token="typography.size.body"><span>Body / 13 / 1.55</span><p class="body-sample">Your files stay on this device until you choose to share them.</p></div>
+        <div data-token="typography.size.code"><span>Code / 14 / 1.55</span><pre class="code-sample"><code><b>const</b> owner = <em>"sameer"</em>;</code></pre></div>
+      </div>
+      <p class="rule-note"><strong>Code stays regular.</strong> Use color and surrounding hierarchy for emphasis; avoid bold code, fake italics, or ornamental ligatures in essential technical content.</p>
+      <div class="syntax-strip">
+        <span data-token="syntax.light.keyword"><i style="--chip:#9B5F50"></i>Light keyword <code>#9B5F50</code></span>
+        <span data-token="syntax.light.string"><i style="--chip:#4F7192"></i>Light string <code>#4F7192</code></span>
+        <span data-token="syntax.dark.keyword"><i style="--chip:#E0A092"></i>Dark keyword <code>#E0A092</code></span>
+        <span data-token="syntax.dark.string"><i style="--chip:#8DBBDA"></i>Dark string <code>#8DBBDA</code></span>
+      </div>
+    </section>
+
+    <section class="content-section graphics-section" id="graphics" aria-labelledby="graphics-title">
+      <header class="section-heading">
+        <p class="section-number">06 / Graphics</p>
+        <h2 id="graphics-title">Extend the Frame,<br>not the symbol set.</h2>
+        <p>Graphic compositions crop and repeat the approved geometry. Nested corners, orthogonal rails, and alignment guides create movement without becoming arrows.</p>
+      </header>
+      <div class="graphic-grid">
+        <figure class="graphic-card field-card"><img src="assets/frame-field.svg" alt="A repeating field made from the Trace Frame geometry"><figcaption><strong>Frame field</strong><span>Quiet repetition at three scales</span></figcaption></figure>
+        <figure class="graphic-card rails-card"><img src="assets/frame-rails.svg" alt="Nested corners and orthogonal rails derived from the Trace Frame"><figcaption><strong>Rails &amp; guides</strong><span>Crop on the 8-unit system</span></figcaption></figure>
+      </div>
+      <div class="graphic-rules">
+        <div><strong>01</strong><p>Use exact Frame paths or orthogonal crops derived from them.</p></div>
+        <div><strong>02</strong><p>Align to the 8-unit rhythm; let fields breathe into ice.</p></div>
+        <div><strong>03</strong><p>Keep opacity quiet so text and product imagery remain primary.</p></div>
+        <div><strong>04</strong><p>Never canonize the legacy arrow lattice or imply directionality.</p></div>
+      </div>
+    </section>
+
+    <section class="content-section" id="foundations" aria-labelledby="foundations-title">
+      <header class="section-heading">
+        <p class="section-number">07 / Foundations</p>
+        <h2 id="foundations-title">A dense, repeatable rhythm.</h2>
+        <p>Small increments support a workbench that feels precise at desktop scale while retaining clear touch and focus targets where interaction demands them.</p>
+      </header>
+      <div class="token-header"><h3>Spacing</h3><p>Use the smallest value that preserves hierarchy</p></div>
+      <div class="spacing-scale">
+        <div data-token="spacing.2"><i style="--space:2px"></i><code>2</code></div>
+        <div data-token="spacing.4"><i style="--space:4px"></i><code>4</code></div>
+        <div data-token="spacing.6"><i style="--space:6px"></i><code>6</code></div>
+        <div data-token="spacing.8"><i style="--space:8px"></i><code>8</code></div>
+        <div data-token="spacing.12"><i style="--space:12px"></i><code>12</code></div>
+        <div data-token="spacing.16"><i style="--space:16px"></i><code>16</code></div>
+        <div data-token="spacing.24"><i style="--space:24px"></i><code>24</code></div>
+      </div>
+      <div class="foundation-grid">
+        <article>
+          <div class="token-header"><h3>Radii</h3></div>
+          <div class="radius-row">
+            <span data-token="radius.control"><i style="border-radius:6px"></i><code>6</code> controls</span>
+            <span data-token="radius.panel"><i style="border-radius:8px"></i><code>8</code> panels</span>
+            <span data-token="radius.window"><i style="border-radius:18px"></i><code>18</code> window</span>
+          </div>
+        </article>
+        <article>
+          <div class="token-header"><h3>Elevation &amp; border</h3></div>
+          <div class="elevation-demo" data-token="elevation.panel"><span>Raised panel</span></div>
+          <p class="token-line" data-token="border.light.default"><code>1px</code> neutral default border</p>
+        </article>
+        <article>
+          <div class="token-header"><h3>Iconography</h3></div>
+          <div class="icon-demo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-label="Example file icon"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path></svg>
+            <span data-token="iconography.library">Lucide</span><span data-token="iconography.size.standard">16 px</span><span data-token="iconography.stroke">1.5 px</span>
+          </div>
+          <p>Use recognizable line icons, round joins, no decorative fill. Pair ambiguous icons with text or a tooltip.</p>
+        </article>
+      </div>
+      <div class="token-header"><h3>Motion</h3><p>Feedback first; choreography second</p></div>
+      <div class="motion-row">
+        <div data-token="motion.instant"><span class="motion-dot instant"></span><code>80 ms</code><small>press</small></div>
+        <div data-token="motion.fast"><span class="motion-dot fast"></span><code>110 ms</code><small>hover</small></div>
+        <div data-token="motion.standard"><span class="motion-dot standard"></span><code>140 ms</code><small>state</small></div>
+        <div data-token="motion.panel"><span class="motion-dot panel-motion"></span><code>180 ms</code><small>panel</small></div>
+      </div>
+      <div class="dimension-strip">
+        <span data-token="layout.titlebar.height"><i style="--dim:34px"></i>Title bar <code>34</code></span>
+        <span data-token="layout.tabbar.height"><i style="--dim:32px"></i>Tab bar <code>32</code></span>
+        <span data-token="layout.tree-row.height"><i style="--dim:30px"></i>Tree row <code>30</code></span>
+      </div>
+    </section>
+
+    <section class="content-section" id="components" aria-labelledby="components-title">
+      <header class="section-heading">
+        <p class="section-number">08 / Components</p>
+        <h2 id="components-title">Controls recede.<br>State remains clear.</h2>
+        <p>Components share compact geometry, visible keyboard focus, restrained elevation, and explicit disabled or pending behavior.</p>
+      </header>
+      <div class="lab-toolbar" aria-label="Component specimen theme">
+        <span>Live specimen</span>
+        <div role="group" aria-label="Choose specimen theme">
+          <button class="active" type="button" data-lab-theme="light" aria-pressed="true">Light</button>
+          <button type="button" data-lab-theme="dark" aria-pressed="false">Dark</button>
+        </div>
+      </div>
+      <div class="component-lab" data-lab="light">
+        <div class="lab-sidebar">
+          <div class="lab-tree-title">EXPLORER <span>•••</span></div>
+          <button class="tree-row selected"><span>⌄</span> trace</button>
+          <button class="tree-row"><span></span> DESIGN.md</button>
+          <button class="tree-row"><span></span> package.json</button>
+          <button class="tree-row"><span>›</span> src</button>
+        </div>
+        <div class="lab-content">
+          <div class="lab-tabs"><button class="active">DESIGN.md <span>×</span></button><button>tokens.json</button></div>
+          <div class="specimen-group">
+            <p class="specimen-label">Buttons</p>
+            <div class="button-row"><button class="app-button primary">Request control</button><button class="app-button">Invite</button><button class="app-button ghost">Cancel</button><button class="app-button" disabled>Pending</button></div>
+          </div>
+          <div class="specimen-group">
+            <p class="specimen-label">Inputs &amp; selection</p>
+            <label class="app-field"><span>Workspace name</span><input value="Trace local" aria-label="Workspace name specimen"></label>
+            <div class="selection-row"><span class="avatar">SA</span><div><strong>Sameer</strong><small>Editing App.tsx</small></div><span class="presence">Present</span></div>
+          </div>
+          <div class="specimen-group">
+            <p class="specimen-label">Semantic states</p>
+            <div class="state-row">
+              <span class="state success" data-token="semantic.light.success">Saved locally</span>
+              <span class="state warning" data-token="semantic.light.warning">Unsynced changes</span>
+              <span class="state danger" data-token="semantic.light.danger">Merge conflict</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="interaction-rules">
+        <article><strong>Focus</strong><p>Use a visible 2 px accent ring with 2 px offset. Never remove focus without an equivalent.</p></article>
+        <article><strong>Selection</strong><p>Combine surface, accent edge, and label. Do not depend on color alone.</p></article>
+        <article><strong>Loading</strong><p>Keep layout stable; name the operation after 400 ms and expose cancellation when safe.</p></article>
+        <article><strong>Empty &amp; error</strong><p>Describe the state, likely cause, and one useful next action. Preserve user input.</p></article>
+      </div>
+    </section>
+
+    <section class="content-section" id="patterns" aria-labelledby="patterns-title">
+      <header class="section-heading">
+        <p class="section-number">09 / Product patterns</p>
+        <h2 id="patterns-title">The workbench tells<br>the whole state.</h2>
+        <p>Dense workflows remain trustworthy when ownership, location, persistence, and recovery stay explicit across every surface.</p>
+      </header>
+      <div class="pattern-list">
+        <article class="pattern">
+          <div class="pattern-number">01</div><div><p class="eyebrow">Collaboration</p><h3>Control &amp; presence</h3><p>Show the current controller in the persistent header. A request names both people and never implies edits are simultaneous when they are not.</p></div>
+          <div class="pattern-demo control-demo"><div><span class="avatar blue">AR</span><span class="avatar green">SA</span></div><p><strong>Aria has control</strong><small>You are viewing this workspace</small></p><button>Request control</button></div>
+        </article>
+        <article class="pattern">
+          <div class="pattern-number">02</div><div><p class="eyebrow">Annotations</p><h3>Anchor comments to context</h3><p>Retain file, line, author, state, and resolution history. When code moves, show the old anchor and ask for confirmation.</p></div>
+          <div class="pattern-demo annotation-demo"><code>42  saveWorkspace();</code><div><strong>SA</strong><p>Should recovery include the unsaved buffer?</p><span>Resolve</span></div></div>
+        </article>
+        <article class="pattern">
+          <div class="pattern-number">03</div><div><p class="eyebrow">Git &amp; diffs</p><h3>Actions name their scope</h3><p>Make repository, branch, staged state, and remote effect visible before commit, discard, or push. Destructive actions require exact targets.</p></div>
+          <div class="pattern-demo diff-demo"><p><span>−</span> background: legacyField;</p><p><span>+</span> background: frameField;</p><footer>2 changes · local only</footer></div>
+        </article>
+        <article class="pattern">
+          <div class="pattern-number">04</div><div><p class="eyebrow">Monaco &amp; terminal</p><h3>Technical surfaces stay native</h3><p>Keep editor and shell typography regular. Preserve selection, cursor, ANSI meaning, copy behavior, and keyboard navigation across themes.</p></div>
+          <div class="pattern-demo terminal-demo"><header><span></span><span></span><span></span><b>trace — zsh</b></header><code>$ git status<br><i>On branch feature/frame</i><br><em>nothing staged</em></code></div>
+        </article>
+        <article class="pattern">
+          <div class="pattern-number">05</div><div><p class="eyebrow">Onboarding</p><h3>Earn trust before setup</h3><p>Lead with what stays local, what account creation enables, and what can be changed later. Use the cobalt-to-ice atmosphere and Frame language.</p></div>
+          <div class="pattern-demo onboarding-demo"><img src="../trace-frame.svg" alt=""><div><strong>Your work starts local.</strong><small>Sign in when you want to collaborate.</small></div></div>
+        </article>
+        <article class="pattern">
+          <div class="pattern-number">06</div><div><p class="eyebrow">Responsive &amp; recovery</p><h3>Reflow without hiding state</h3><p>Collapse secondary sidebars first, preserve title and owner, and turn the bottom drawer into a focused sheet on narrow windows. Offline is a state, never a dead end.</p></div>
+          <div class="pattern-demo recovery-demo"><span>Offline</span><p><strong>Your edits are saved locally.</strong><small>Trace will retry when your connection returns.</small></p><button>View details</button></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="content-section voice-section" id="voice" aria-labelledby="voice-title">
+      <header class="section-heading">
+        <p class="section-number">10 / Voice</p>
+        <h2 id="voice-title">Calm precision.</h2>
+        <p>Trace speaks like a capable collaborator: direct, technically honest, privacy-aware, and explicit about ownership, control, files, failure, and recovery.</p>
+      </header>
+      <div class="voice-attributes">
+        <article><h3>Direct</h3><p>Lead with the state or action. Remove ceremony and filler.</p></article>
+        <article><h3>Honest</h3><p>Name what happened, what is known, and what remains uncertain.</p></article>
+        <article><h3>Protective</h3><p>State where files live and when data leaves the device.</p></article>
+        <article><h3>Recoverable</h3><p>Offer the safest useful next step without blaming the person.</p></article>
+      </div>
+      <div class="copy-comparison">
+        <div class="copy-good"><span>Use</span><p>Aria has control. You can keep viewing the workspace.</p><p>We couldn’t push. Your commit is still saved locally.</p><p>Discard 3 unstaged changes in <code>App.tsx</code>?</p></div>
+        <div class="copy-bad"><span>Avoid</span><p>You do not have permission to edit.</p><p>Oops! Something went wrong.</p><p>Are you sure you want to proceed?</p></div>
+      </div>
+      <div class="voice-table">
+        <div><strong>Actions</strong><p>Use verb + object: “Request control”, “Open local folder”, “Retry push”.</p></div>
+        <div><strong>Privacy</strong><p>Name the boundary: “Stays on this device” or “Shared with workspace members”.</p></div>
+        <div><strong>Errors</strong><p>State effect before cause: “Push failed. Your commit remains local.”</p></div>
+        <div><strong>Destructive</strong><p>Name count and target. Explain recovery before confirmation.</p></div>
+      </div>
+    </section>
+
+    <section class="content-section" id="accessibility" aria-labelledby="accessibility-title">
+      <header class="section-heading">
+        <p class="section-number">11 / Accessibility &amp; adoption</p>
+        <h2 id="accessibility-title">Clarity is part<br>of the system.</h2>
+        <p>Production text targets 4.5:1; graphical controls and large text target 3:1. Keyboard, screen-reader, zoom, and reduced-motion behavior are requirements, not polish.</p>
+      </header>
+      <div class="a11y-grid">
+        <article><span class="status implemented">Implemented</span><h3>Documented reality</h3><p>Current Trace surfaces, neutral modes, compact dimensions, syntax roles, accents, and motion values are transcribed from the application.</p></article>
+        <article><span class="status extension">Extension</span><h3>Approved guidance</h3><p>Canonical Frame usage, fixed brand palette, graphic language, darker solid-action colors, display type, and voice rules extend the system.</p></article>
+        <article><span class="status migration">Migration target</span><h3>Known contrast gaps</h3><p>Muted and faint light-mode text, plus some base-accent solid actions, need accessible token adoption. Do not treat documentation as a silent runtime fix.</p></article>
+      </div>
+      <div class="contrast-panel">
+        <div><span class="contrast-sample light-pass">Aa</span><p><strong>12.33:1</strong><small>#303438 on #FDFDFC · pass</small></p></div>
+        <div><span class="contrast-sample dark-pass">Aa</span><p><strong>12.86:1</strong><small>#E0E8EE on #19232C · pass</small></p></div>
+        <div><span class="contrast-sample light-gap">Aa</span><p><strong>3.84:1</strong><small>Muted light text · migration target</small></p></div>
+      </div>
+      <div class="adoption-note">
+        <div><p class="eyebrow">Scope boundary</p><h3>This book documents; it does not migrate.</h3></div>
+        <p>No application components, runtime styles, onboarding flow, packaging, or dependencies are changed here. App icons, social templates, legacy in-app mark replacement, shared token extraction, and component migration are future adoption work.</p>
+      </div>
+    </section>
+
+    <footer class="brandbook-footer">
+      <div class="brand-lockup"><img src="../trace-frame.svg" alt="" width="28" height="28"><span>Trace</span></div>
+      <p>Canonical design reference · Offline-capable · <a href="tokens.json">Machine-readable tokens</a></p>
+    </footer>
+  </main>
+  <div class="copy-toast" role="status" aria-live="polite" aria-atomic="true"></div>
+</body>
+</html>

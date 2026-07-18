@@ -3,17 +3,25 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { terminalApi, type TerminalEvent, type TerminalSession } from ".";
+import { terminalMetrics, terminalPalette } from "../preferences/presentation";
+import type { Accent, CodeSize, ResolvedAppearance } from "../preferences/types";
 
 export function XtermSurface({
   session,
   active,
   drawerOpen,
+  resolvedAppearance,
+  accent,
+  codeSize,
   pendingAction,
   onError,
 }: {
   session: TerminalSession;
   active: boolean;
   drawerOpen: boolean;
+  resolvedAppearance: ResolvedAppearance;
+  accent: Accent;
+  codeSize: CodeSize;
   pendingAction: "closing" | "requesting-control" | null;
   onError: (message: string) => void;
 }) {
@@ -23,19 +31,23 @@ export function XtermSurface({
   const sessionRef = useRef(session);
   const visibleRef = useRef(active && drawerOpen);
   const lastSizeRef = useRef({ cols: session.cols, rows: session.rows });
+  const appearanceRef = useRef({ resolvedAppearance, accent, codeSize });
 
   sessionRef.current = session;
   visibleRef.current = active && drawerOpen;
+  appearanceRef.current = { resolvedAppearance, accent, codeSize };
 
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
 
+    const initialAppearance = appearanceRef.current;
+    const initialMetrics = terminalMetrics(initialAppearance.codeSize);
     const terminal = new Terminal({
       fontFamily: '"IBM Plex Mono", "SF Mono", Menlo, monospace',
-      fontSize: 12,
+      fontSize: initialMetrics.fontSize,
       fontWeight: "400",
-      lineHeight: 1.45,
+      lineHeight: initialMetrics.lineHeight,
       letterSpacing: 0,
       cursorStyle: "block",
       cursorBlink: true,
@@ -46,29 +58,7 @@ export function XtermSurface({
       macOptionIsMeta: true,
       rightClickSelectsWord: true,
       screenReaderMode: false,
-      theme: {
-        background: "#00000000",
-        foreground: "#51575c",
-        cursor: "#7c8388",
-        cursorAccent: "#fcfcfb",
-        selectionBackground: "#dfeaf3",
-        black: "#4f5358",
-        red: "#9a6558",
-        green: "#657f5c",
-        yellow: "#927050",
-        blue: "#4f7192",
-        magenta: "#7c6c8c",
-        cyan: "#5d7790",
-        white: "#e8eaeb",
-        brightBlack: "#8b9197",
-        brightRed: "#a86d60",
-        brightGreen: "#67835f",
-        brightYellow: "#a07e56",
-        brightBlue: "#6686a2",
-        brightMagenta: "#8d789b",
-        brightCyan: "#6f8e9e",
-        brightWhite: "#ffffff",
-      },
+      theme: terminalPalette(initialAppearance.resolvedAppearance, initialAppearance.accent),
     });
     const fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);
@@ -217,6 +207,23 @@ export function XtermSurface({
     if (!terminal) return;
     terminal.options.disableStdin = !session.control.localHasControl || session.exited;
   }, [session.control.localHasControl, session.exited]);
+
+  useEffect(() => {
+    const terminal = terminalRef.current;
+    if (!terminal) return;
+    const metrics = terminalMetrics(codeSize);
+    terminal.options.theme = terminalPalette(resolvedAppearance, accent);
+    terminal.options.fontSize = metrics.fontSize;
+    terminal.options.lineHeight = metrics.lineHeight;
+    const frame = requestAnimationFrame(() => {
+      try {
+        fitAddonRef.current?.fit();
+      } catch {
+        // The terminal may be hidden while a preference is changing.
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [accent, codeSize, resolvedAppearance]);
 
   useEffect(() => {
     if (!active || !drawerOpen) return;

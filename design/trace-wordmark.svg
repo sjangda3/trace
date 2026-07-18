@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 64" fill="currentColor" role="img" aria-labelledby="title">
+  <title id="title">Trace geometric wordmark concept</title>
+  <path d="M4 12h30v8H23v32h-8V20H4z"/>
+  <path fill-rule="evenodd" d="M42 12h18l8 8v14l-8 8H50v10h-8zM50 20v14h6l4-4v-6l-4-4z"/>
+  <path fill-rule="evenodd" d="m73 52 13-40h12l13 40h-9l-3-10H85l-3 10zm15-18h8l-4-14z"/>
+  <path d="m146 20-6-8h-16l-8 8v24l8 8h16l6-8-7-5-4 5h-7l-4-4V24l4-4h7l4 5z"/>
+  <path d="M154 12h34v8h-26v8h20v8h-20v8h26v8h-34z"/>
+</svg>

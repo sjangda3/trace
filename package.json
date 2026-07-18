@@ -14,7 +14,7 @@
     "release:mac:x64": "node scripts/check-mac-release-env.cjs && npm run build && electron-builder --mac --x64 --publish never -c.mac.forceCodeSigning=true",
     "rebuild:native": "electron-builder install-app-deps",
     "postinstall": "electron-builder install-app-deps",
-    "test": "vitest run --exclude electron/account.test.cjs && node --test electron/account.test.cjs",
+    "test": "vitest run --exclude electron/account.test.cjs --exclude electron/preferences.test.cjs && node --test electron/account.test.cjs electron/preferences.test.cjs",
     "typecheck": "tsc -b --pretty false",
     "start": "electron ."
   },

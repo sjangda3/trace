@@ -24,7 +24,7 @@
 .git-patch-panel button:focus-visible,
 .git-sidebar-dialog button:focus-visible,
 .git-sidebar-dialog input:focus-visible {
-  outline: 2px solid rgba(83, 132, 172, 0.52);
+  outline: 2px solid var(--wb-focus);
   outline-offset: -2px;
 }
 
@@ -60,7 +60,7 @@
 .git-repository-row > svg {
   width: 15px;
   height: 15px;
-  color: #748a9a;
+  color: var(--wb-accent);
   stroke-width: 1.5;
 }
 
@@ -91,7 +91,7 @@
 }
 
 .git-repository-row > small {
-  color: #6f8799;
+  color: color-mix(in srgb, var(--wb-accent) 58%, var(--wb-text-muted));
   font-variant-numeric: tabular-nums;
 }
 
@@ -177,7 +177,7 @@
   width: 24px;
   height: 24px;
   margin-bottom: 10px;
-  color: #8fa0ac;
+  color: color-mix(in srgb, var(--wb-accent) 58%, var(--wb-text-muted));
   stroke-width: 1.25;
 }
 
@@ -254,7 +254,7 @@
 }
 
 .git-commit-box textarea:focus {
-  box-shadow: inset 0 0 0 1px rgba(75, 130, 177, 0.45);
+  box-shadow: inset 0 0 0 1px var(--wb-focus);
 }
 
 .git-commit-box > button {
@@ -266,14 +266,14 @@
   gap: 6px;
   margin: 4px;
   border-radius: 4px;
-  background: #688eae;
+  background: var(--wb-accent);
   color: #fff;
   font-size: 0.6875rem;
   font-weight: 500;
 }
 
 .git-commit-box > button:hover:not(:disabled) {
-  background: #5e83a3;
+  background: color-mix(in srgb, var(--wb-accent) 88%, var(--wb-text));
 }
 
 .git-commit-box > button:disabled {
@@ -420,7 +420,7 @@
 .git-change-file > svg {
   width: 13px;
   height: 13px;
-  color: #7d9bb0;
+  color: var(--wb-accent);
   stroke-width: 1.45;
 }
 
@@ -441,13 +441,13 @@
   text-align: center;
 }
 
-.git-status-letter--m { color: #98764c; }
-.git-status-letter--a { color: #60855e; }
-.git-status-letter--d { color: #a35f58; }
-.git-status-letter--r { color: #6f6e9d; }
-.git-status-letter--u { color: #5f83a4; }
-.git-status-letter--c { color: #a25550; }
-.git-status-letter--t { color: #7c6b8e; }
+.git-status-letter--m { color: var(--wb-warning); }
+.git-status-letter--a { color: var(--wb-success); }
+.git-status-letter--d { color: var(--wb-danger); }
+.git-status-letter--r { color: color-mix(in srgb, var(--wb-accent) 58%, var(--wb-danger)); }
+.git-status-letter--u { color: var(--wb-accent); }
+.git-status-letter--c { color: var(--wb-danger); }
+.git-status-letter--t { color: color-mix(in srgb, var(--wb-accent) 58%, var(--wb-warning)); }
 
 .git-change-action {
   display: grid;
@@ -527,12 +527,12 @@
 .git-branch-row > svg:first-child {
   width: 13px;
   height: 13px;
-  color: #8097a7;
+  color: color-mix(in srgb, var(--wb-accent) 54%, var(--wb-text-muted));
   stroke-width: 1.5;
 }
 
 .git-branch-row.is-current > svg:first-child {
-  color: #5d85a4;
+  color: var(--wb-accent);
 }
 
 .git-branch-copy {
@@ -553,7 +553,7 @@
 }
 
 .git-branch-row.is-current .git-branch-copy span {
-  color: #405d73;
+  color: var(--wb-accent);
   font-weight: 600;
 }
 
@@ -570,7 +570,7 @@
 .git-current-check {
   width: 13px;
   height: 13px;
-  color: #6889a2;
+  color: var(--wb-accent);
   stroke-width: 1.7;
 }
 
@@ -696,8 +696,8 @@
 }
 
 .git-sidebar-dialog > input:focus {
-  border-color: rgba(75, 130, 177, 0.55);
-  box-shadow: 0 0 0 2px rgba(75, 130, 177, 0.1);
+  border-color: var(--wb-focus);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--wb-focus) 20%, transparent);
 }
 
 .git-sidebar-dialog > p {
@@ -732,8 +732,8 @@
 }
 
 .git-sidebar-dialog footer button.is-primary {
-  border-color: #6489a8;
-  background: #688eae;
+  border-color: var(--wb-accent);
+  background: var(--wb-accent);
   color: #fff;
 }
 
@@ -787,7 +787,7 @@
   width: 25px;
   height: 25px;
   margin-bottom: 10px;
-  color: #8da0ad;
+  color: color-mix(in srgb, var(--wb-accent) 58%, var(--wb-text-muted));
   stroke-width: 1.25;
 }
 
@@ -825,23 +825,23 @@
 
 .git-commit-lane path {
   fill: none;
-  stroke: #91adbf;
+  stroke: color-mix(in srgb, var(--wb-accent) 68%, var(--wb-text-muted));
   stroke-width: 1.25;
 }
 
 .git-commit-lane circle {
-  fill: #fff;
-  stroke: #648baa;
+  fill: var(--wb-surface-raised);
+  stroke: var(--wb-accent);
   stroke-width: 1.6;
 }
 
 .git-commit-lane .git-lane-secondary {
-  stroke: #b0a2bd;
+  stroke: color-mix(in srgb, var(--wb-accent) 55%, var(--wb-danger));
 }
 
 .git-commit-lane .git-lane-secondary-dot {
-  fill: #fff;
-  stroke: #8c78a0;
+  fill: var(--wb-surface-raised);
+  stroke: color-mix(in srgb, var(--wb-accent) 55%, var(--wb-danger));
   stroke-width: 1.3;
 }
 
@@ -864,11 +864,11 @@
 
 .git-commit-row:hover,
 .git-commit-row.is-selected {
-  background: #edf3f7;
+  background: var(--wb-accent-soft);
 }
 
 .git-commit-row.is-selected {
-  box-shadow: inset 2px 0 #6b93b3;
+  box-shadow: inset 2px 0 var(--wb-accent);
 }
 
 .git-selection-indicator {
@@ -878,7 +878,7 @@
   left: 0;
   width: 2px;
   border-radius: 99px;
-  background: #6b93b3;
+  background: var(--wb-accent);
   pointer-events: none;
 }
 
@@ -909,10 +909,10 @@
   gap: 3px;
   padding: 0 4px;
   overflow: hidden;
-  border: 1px solid rgba(82, 119, 148, 0.14);
+  border: 1px solid color-mix(in srgb, var(--wb-accent) 34%, var(--wb-border));
   border-radius: 4px;
-  background: #edf4f8;
-  color: #5b7a92;
+  background: var(--wb-accent-soft);
+  color: var(--wb-accent);
   font-size: 0.5rem;
   line-height: 13px;
   text-overflow: ellipsis;
@@ -1022,7 +1022,7 @@
   flex: 0 0 auto;
   width: 15px;
   height: 15px;
-  color: #6f93ae;
+  color: var(--wb-accent);
   stroke-width: 1.5;
 }
 
@@ -1107,7 +1107,7 @@
   width: 22px;
   height: 22px;
   margin-bottom: 3px;
-  color: #859ba9;
+  color: color-mix(in srgb, var(--wb-accent) 58%, var(--wb-text-muted));
   stroke-width: 1.3;
 }
 
@@ -1131,7 +1131,7 @@
 }
 
 .git-patch-scroll:focus-visible {
-  box-shadow: inset 0 0 0 2px rgba(75, 130, 177, 0.28);
+  box-shadow: inset 0 0 0 2px var(--wb-focus);
 }
 
 .git-patch-code {
@@ -1188,8 +1188,8 @@
 }
 
 .git-patch-line--hunk {
-  background: #eef4f8;
-  color: #66849a;
+  background: var(--wb-accent-soft);
+  color: var(--wb-accent);
 }
 
 .git-patch-line--header,
@@ -1222,6 +1222,283 @@
 .git-branches-sidebar input:focus-visible,
 .git-history-panel button:focus-visible,
 .git-patch-panel button:focus-visible {
-  outline: 2px solid rgba(83, 132, 172, 0.52);
+  outline: 2px solid var(--wb-focus);
   outline-offset: -2px;
+}
+
+/* Dark appearance --------------------------------------------------------- */
+
+[data-theme="dark"] .git-filter-field,
+[data-theme="dark"] .git-repository-row,
+[data-theme="dark"] .git-commit-box textarea,
+[data-theme="dark"] .git-pull-request-placeholder,
+[data-theme="dark"] .git-patch-panel > header,
+[data-theme="dark"] .git-patch-line > span {
+  border-color: var(--wb-border);
+}
+
+[data-theme="dark"] .git-inline-message,
+[data-theme="dark"] .git-commit-box,
+[data-theme="dark"] .git-empty-state button,
+[data-theme="dark"] .git-row-button,
+[data-theme="dark"] .git-sidebar-dialog,
+[data-theme="dark"] .git-sidebar-dialog > input,
+[data-theme="dark"] .git-sidebar-dialog footer button,
+[data-theme="dark"] .git-load-more,
+[data-theme="dark"] .git-patch-panel,
+[data-theme="dark"] .git-patch-actions > button:first-child {
+  border-color: var(--wb-border);
+  background: var(--wb-surface-raised);
+}
+
+[data-theme="dark"] .git-history-body {
+  background: var(--wb-canvas);
+}
+
+[data-theme="dark"] .git-patch-panel > header,
+[data-theme="dark"] .git-pull-request-placeholder > small,
+[data-theme="dark"] .git-section-toggle small {
+  background: var(--wb-surface);
+}
+
+[data-theme="dark"] .git-patch-body {
+  background: var(--wb-code-bg);
+}
+
+[data-theme="dark"] .git-sidebar-scroll,
+[data-theme="dark"] .git-history-body,
+[data-theme="dark"] .git-patch-scroll {
+  scrollbar-color: color-mix(in srgb, var(--wb-text-muted) 38%, transparent) transparent;
+}
+
+[data-theme="dark"] .git-sidebar-scroll::-webkit-scrollbar-thumb,
+[data-theme="dark"] .git-history-body::-webkit-scrollbar-thumb,
+[data-theme="dark"] .git-patch-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--wb-text-muted) 34%, transparent);
+}
+
+[data-theme="dark"] .git-repository-row strong,
+[data-theme="dark"] .git-empty-state strong,
+[data-theme="dark"] .git-section-toggle,
+[data-theme="dark"] .git-change-file,
+[data-theme="dark"] .git-branch-row,
+[data-theme="dark"] .git-pull-request-placeholder strong,
+[data-theme="dark"] .git-sidebar-dialog header strong,
+[data-theme="dark"] .git-sidebar-dialog > input,
+[data-theme="dark"] .git-history-empty strong,
+[data-theme="dark"] .git-commit-row,
+[data-theme="dark"] .git-patch-title strong,
+[data-theme="dark"] .git-patch-message strong {
+  color: var(--wb-text);
+}
+
+[data-theme="dark"] .git-filter-field > svg,
+[data-theme="dark"] .git-repository-row span,
+[data-theme="dark"] .git-loading-state,
+[data-theme="dark"] .git-empty-state,
+[data-theme="dark"] .git-empty-state p,
+[data-theme="dark"] .git-commit-box textarea::placeholder,
+[data-theme="dark"] .git-section-toggle > svg,
+[data-theme="dark"] .git-section-toggle small,
+[data-theme="dark"] .git-quiet-icon-button,
+[data-theme="dark"] .git-history-header-actions button,
+[data-theme="dark"] .git-patch-close,
+[data-theme="dark"] .git-section-empty,
+[data-theme="dark"] .git-change-file small,
+[data-theme="dark"] .git-change-action,
+[data-theme="dark"] .git-branches-view-actions,
+[data-theme="dark"] .git-branch-copy small,
+[data-theme="dark"] .git-tracking-count,
+[data-theme="dark"] .git-pull-request-placeholder,
+[data-theme="dark"] .git-pull-request-placeholder span,
+[data-theme="dark"] .git-pull-request-placeholder small,
+[data-theme="dark"] .git-sidebar-dialog header button,
+[data-theme="dark"] .git-sidebar-dialog > p,
+[data-theme="dark"] .git-history-empty,
+[data-theme="dark"] .git-history-empty p,
+[data-theme="dark"] .git-commit-refs small,
+[data-theme="dark"] .git-commit-meta,
+[data-theme="dark"] .git-commit-row > code,
+[data-theme="dark"] .git-load-more,
+[data-theme="dark"] .git-patch-title span,
+[data-theme="dark"] .git-patch-actions > button:first-child,
+[data-theme="dark"] .git-patch-message,
+[data-theme="dark"] .git-patch-line > span,
+[data-theme="dark"] .git-patch-line--header,
+[data-theme="dark"] .git-patch-line--meta {
+  color: var(--wb-text-muted);
+}
+
+[data-theme="dark"] .git-repository-row > small {
+  color: color-mix(in srgb, var(--wb-accent) 60%, var(--wb-text-muted));
+}
+
+[data-theme="dark"] .git-empty-state > svg,
+[data-theme="dark"] .git-history-empty svg,
+[data-theme="dark"] .git-patch-message > svg {
+  color: color-mix(in srgb, var(--wb-accent) 58%, var(--wb-text-muted));
+}
+
+[data-theme="dark"] .git-empty-state button,
+[data-theme="dark"] .git-row-button,
+[data-theme="dark"] .git-sidebar-dialog footer button {
+  color: var(--wb-text-muted);
+}
+
+[data-theme="dark"] .git-empty-state button:hover,
+[data-theme="dark"] .git-row-button:hover,
+[data-theme="dark"] .git-section-toggle:hover,
+[data-theme="dark"] .git-quiet-icon-button:hover:not(:disabled),
+[data-theme="dark"] .git-history-header-actions button:hover,
+[data-theme="dark"] .git-patch-close:hover,
+[data-theme="dark"] .git-change-row:hover,
+[data-theme="dark"] .git-change-action:hover,
+[data-theme="dark"] .git-branch-row:hover,
+[data-theme="dark"] .git-sidebar-dialog header button:hover,
+[data-theme="dark"] .git-load-more:hover,
+[data-theme="dark"] .git-patch-actions > button:first-child:hover:not(:disabled) {
+  background: var(--wb-surface-hover);
+  color: var(--wb-text);
+}
+
+[data-theme="dark"] .git-inline-message {
+  color: var(--wb-text-muted);
+}
+
+[data-theme="dark"] .git-inline-message--error {
+  border-color: color-mix(in srgb, var(--wb-danger) 38%, var(--wb-border));
+  background: color-mix(in srgb, var(--wb-danger) 10%, var(--wb-surface-raised));
+  color: var(--wb-danger);
+}
+
+[data-theme="dark"] .git-commit-box {
+  box-shadow: var(--wb-shadow);
+}
+
+[data-theme="dark"] .git-commit-box textarea {
+  color: var(--wb-text);
+}
+
+[data-theme="dark"] .git-commit-box > button,
+[data-theme="dark"] .git-sidebar-dialog footer button.is-primary {
+  border-color: var(--wb-accent);
+  background: var(--wb-accent);
+  color: var(--wb-canvas);
+}
+
+[data-theme="dark"] .git-commit-box > button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--wb-accent) 88%, var(--wb-text));
+}
+
+[data-theme="dark"] .git-commit-box > button:disabled {
+  background: var(--wb-surface-hover);
+  color: var(--wb-text-muted);
+}
+
+[data-theme="dark"] .git-change-action:hover {
+  color: var(--wb-text);
+}
+
+[data-theme="dark"] .git-branch-row.is-current .git-branch-copy span,
+[data-theme="dark"] .git-branch-row.is-current > svg:first-child,
+[data-theme="dark"] .git-current-check,
+[data-theme="dark"] .git-change-file > svg,
+[data-theme="dark"] .git-patch-title > svg {
+  color: var(--wb-accent);
+}
+
+[data-theme="dark"] .git-sidebar-dialog-backdrop {
+  background: color-mix(in srgb, var(--wb-canvas) 76%, transparent);
+}
+
+[data-theme="dark"] .git-sidebar-dialog {
+  border-color: var(--wb-border-strong);
+  box-shadow: var(--wb-shadow);
+}
+
+[data-theme="dark"] .git-sidebar-dialog > label {
+  color: var(--wb-text-muted);
+}
+
+[data-theme="dark"] .git-sidebar-dialog .git-dialog-error {
+  color: var(--wb-danger);
+}
+
+[data-theme="dark"] .git-commit-lane path {
+  stroke: color-mix(in srgb, var(--wb-accent) 68%, var(--wb-text-muted));
+}
+
+[data-theme="dark"] .git-commit-lane circle {
+  fill: var(--wb-surface-raised);
+  stroke: var(--wb-accent);
+}
+
+[data-theme="dark"] .git-commit-lane .git-lane-secondary {
+  stroke: color-mix(in srgb, var(--wb-accent) 55%, var(--wb-danger));
+}
+
+[data-theme="dark"] .git-commit-lane .git-lane-secondary-dot {
+  fill: var(--wb-surface-raised);
+  stroke: color-mix(in srgb, var(--wb-accent) 55%, var(--wb-danger));
+}
+
+[data-theme="dark"] .git-commit-row:hover,
+[data-theme="dark"] .git-commit-row.is-selected {
+  background: var(--wb-accent-soft);
+}
+
+[data-theme="dark"] .git-commit-row.is-selected {
+  box-shadow: inset 2px 0 var(--wb-accent);
+}
+
+[data-theme="dark"] .git-selection-indicator {
+  background: var(--wb-accent);
+}
+
+[data-theme="dark"] .git-commit-refs > span {
+  border-color: color-mix(in srgb, var(--wb-accent) 34%, var(--wb-border));
+  background: var(--wb-accent-soft);
+  color: var(--wb-accent);
+}
+
+[data-theme="dark"] .git-patch-panel {
+  border-color: var(--wb-border-strong);
+  box-shadow: var(--wb-shadow);
+}
+
+[data-theme="dark"] .git-patch-code {
+  color: var(--wb-code-text);
+}
+
+[data-theme="dark"] .git-patch-line {
+  color: var(--wb-code-text);
+}
+
+[data-theme="dark"] .git-patch-message--error > svg {
+  color: var(--wb-danger);
+}
+
+[data-theme="dark"] .git-patch-line--added {
+  background: color-mix(in srgb, var(--wb-success) 10%, var(--wb-code-bg));
+  color: color-mix(in srgb, var(--wb-success) 72%, var(--wb-code-text));
+}
+
+[data-theme="dark"] .git-patch-line--added .git-patch-new-line {
+  background: color-mix(in srgb, var(--wb-success) 17%, var(--wb-code-bg));
+  color: color-mix(in srgb, var(--wb-success) 76%, var(--wb-code-text));
+}
+
+[data-theme="dark"] .git-patch-line--removed {
+  background: color-mix(in srgb, var(--wb-danger) 10%, var(--wb-code-bg));
+  color: color-mix(in srgb, var(--wb-danger) 72%, var(--wb-code-text));
+}
+
+[data-theme="dark"] .git-patch-line--removed .git-patch-old-line {
+  background: color-mix(in srgb, var(--wb-danger) 17%, var(--wb-code-bg));
+  color: color-mix(in srgb, var(--wb-danger) 76%, var(--wb-code-text));
+}
+
+[data-theme="dark"] .git-patch-line--hunk {
+  background: var(--wb-accent-soft);
+  color: var(--wb-accent);
 }

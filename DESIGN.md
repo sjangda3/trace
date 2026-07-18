@@ -1,66 +1,29 @@
-# Trace interface system
+# Trace design
 
-This interface is a dense macOS product surface. It should feel native, quiet, and exact—not like a dashboard assembled from cards.
+The canonical Trace design reference is the offline interactive [design system and brandbook](design/brandbook/index.html). Open it directly in a browser; no build step or network connection is required.
 
-## Geometry
+## Identity
 
-The reference window is `1250 × 727` logical pixels at its default size.
+- The original [Frame mark](design/trace-frame.svg) is the sole approved logo. Its three paths and 64-unit geometry must not be redrawn, compacted, or turned into a bespoke wordmark.
+- Trace uses a fixed deep-navy, cobalt, acrylic-blue, and ice brand atmosphere. Cobalt, violet, teal, amber, and rose are workbench personalization accents—not corporate identity colors.
+- Frame-derived fields, nested corners, orthogonal rails, and alignment guides form the graphic language. The legacy Ramp-derived arrow lattice is not part of the brand.
+- Product voice follows calm precision: direct, technically honest, privacy-aware, and explicit about ownership, local files, errors, control, and recovery.
 
-| Element | Token |
-| --- | --- |
-| Window radius | `18px` |
-| Outer panel inset | `8px` |
-| Sidebar | `324px` at the default window width |
-| Split channel | `8px` |
-| Editor | `900px` at the default window width |
-| Titlebar | `34px` |
-| Editor tabs | `32px` |
-| Breadcrumb bar | `31px` |
-| Statusbar | `32px` |
-| Tree row | `30px` |
-| Code line | `20px` |
-| Panel radius | `8px` |
-| Control radius | `5–7px` |
-| Main icon | `16px`, `1.5px` rounded stroke |
+## Product system
 
-Spacing uses a strict `4 / 8 / 12 / 16 / 24px` scale. Related controls stay within `4–8px`; separate toolbar groups use `12–16px` or flexible space.
+The implemented workbench uses the system/SF stack for interface text and IBM Plex Mono with system-mono fallbacks for technical roles. Its compact foundations use:
 
-## Typography
+- 2, 4, 6, 8, 12, 16, and 24px spacing
+- 6, 8, and 18px radii
+- 80, 110, 140, and 180ms motion durations
+- quiet neutral surfaces, clear selection and focus, and restrained elevation
 
-- Product UI: `-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Helvetica Neue", Arial, sans-serif`.
-- Code: `"IBM Plex Mono", "SF Mono", Menlo, Monaco, ui-monospace, monospace`.
-- UI roles: `12px` metadata, `13px` toolbar/tab text, `14px` tree text.
-- Code: `14px / 20px`, weight `400`, ligatures disabled.
-- Use regular and semibold as the primary UI weights. Syntax tokens never become bold.
-- Keep default letter spacing and tabular line numbers.
+The brandbook documents layouts, controls, panels, collaboration ownership, annotations, Git and diffs, Monaco, terminal, onboarding, responsive behavior, empty/loading/error/offline states, accessibility, and recovery language.
 
-## Palette
+## Implementation interface
 
-| Role | Value |
-| --- | --- |
-| Acrylic chrome | `#d2e5f3` |
-| Panel | `#fdfdfc` |
-| Primary text | `#303438` |
-| Secondary text | `#858b91` |
-| Hairline | `rgba(70, 81, 91, .19)` |
-| Selection | `#e5eef7` |
-| Active code line | `#e9ebef` |
-| Keyword | `#9b5f50` |
-| String/path | `#4f7192` |
-| Type | `#705a80` |
-| Function | `#617354` |
+[tokens.json](design/brandbook/tokens.json) is the machine-readable documentation interface. Every token is labeled **implemented** when transcribed from the current product or **extension** when it is newly approved guidance.
 
-## Icon treatment
+The brandbook is documentation, not a silent migration. It does not change application components, runtime styles, onboarding behavior, packaging, or dependencies. Known contrast gaps are recorded as migration targets; application adoption, app icons, marketing templates, and replacement of legacy in-product marks remain future work.
 
-- Toolbar actions use thin, rounded line icons without labels.
-- File-tree folders are filled, low-contrast silhouettes.
-- Source files use compact colored document tiles with white internal marks.
-- Do not mix emoji, filled app icons, or oversized illustrations into the work surface.
-
-## Composition rules
-
-- The editor is always the dominant uninterrupted plane.
-- Navigation and tools are continuous surfaces separated by insets and hairlines, not cards.
-- Project Map, terminal, PR review, and preview surfaces open as panels only when requested.
-- Avoid large headings, pill-heavy controls, card grids, decorative gradients inside panels, and persistent AI chat UI.
-- Product features appear as subtle tools within the shell; they do not reshape the default editor layout.
+Exploratory files under **design/trace-logo-exploration/** remain an unlinked archive and are not approved identity assets.

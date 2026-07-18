@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, LayoutGroup, MotionConfig, motion } from "motion/react";
 import {
   Bell,
@@ -83,6 +83,9 @@ import {
 import { Onboarding } from "./account/Onboarding";
 import { traceAccountApi } from "./account/api";
 import { launchViewForAccount, type TraceLaunchView } from "./account/launch-state";
+import { PreferencesProvider, usePreferences } from "./preferences";
+import { PreferencesDialog } from "./preferences/PreferencesDialog";
+import type { Accent, CodeSize, ResolvedAppearance, TracePreferences } from "./preferences/types";
 import "./git/git.css";
 
 type RailItem = {
@@ -852,6 +855,9 @@ function Editor({
   canGoForward,
   onGoBack,
   onGoForward,
+  resolvedAppearance,
+  accent,
+  codeSize,
 }: {
   documents: OpenDocument[];
   activeDocument: OpenDocument | null;
@@ -879,6 +885,9 @@ function Editor({
   canGoForward: boolean;
   onGoBack: () => void;
   onGoForward: () => void;
+  resolvedAppearance: ResolvedAppearance;
+  accent: Accent;
+  codeSize: CodeSize;
 }) {
   return (
     <motion.main
@@ -910,6 +919,9 @@ function Editor({
             language={activeDocument.language}
             openPaths={documents.map((document) => document.path)}
             readOnly={readOnly || initializing}
+            resolvedAppearance={resolvedAppearance}
+            accent={accent}
+            codeSize={codeSize}
             onChange={onChange}
             onCursorChange={onCursorChange}
           />
@@ -986,7 +998,14 @@ function Editor({
             </motion.div>
           ) : null}
         </AnimatePresence>
-        <TerminalDrawer open={terminalOpen} terminal={terminal} onClose={onCloseTerminal} />
+        <TerminalDrawer
+          open={terminalOpen}
+          terminal={terminal}
+          resolvedAppearance={resolvedAppearance}
+          accent={accent}
+          codeSize={codeSize}
+          onClose={onCloseTerminal}
+        />
       </div>
     </motion.main>
   );
@@ -1125,8 +1144,15 @@ function SidebarLayer({
   );
 }
 
-export default function App() {
+function TraceApp() {
+  const {
+    preferences,
+    resolvedAppearance,
+    error: preferencesError,
+    savePreferences,
+  } = usePreferences();
   const [launchView, setLaunchView] = useState<TraceLaunchView>("checking");
+  const [preferencesOpen, setPreferencesOpen] = useState(false);
   const editor = useWorkspaceEditor({ commandsEnabled: launchView === "workspace" });
   const editorRef = useRef<MonacoEditorHandle | null>(null);
   const [activeRail, setActiveRail] = useState<RailItem["id"]>("files");
@@ -1156,6 +1182,10 @@ export default function App() {
   const [collaborationMessage, setCollaborationMessage] = useState<string | null>(null);
   const [pendingSearchFocus, setPendingSearchFocus] = useState<PendingSearchFocus | null>(null);
   const [searchMessage, setSearchMessage] = useState<string | null>(null);
+
+  const updatePreferences = useCallback((next: TracePreferences) => {
+    void savePreferences(next).catch(() => undefined);
+  }, [savePreferences]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1850,6 +1880,10 @@ export default function App() {
   useEffect(() => {
     const dispose = window.collabWorkspace?.onCommand((payload) => {
       const command = typeof payload === "string" ? payload : payload.command;
+      if (command === "open-preferences" && launchView === "workspace") {
+        setPreferencesOpen(true);
+        return;
+      }
       if (launchView !== "workspace") return;
       if (command === "quick-open") setQuickOpen(true);
       if (command === "workspace-search") setActiveRail("search");
@@ -1905,7 +1939,12 @@ export default function App() {
             {launchView === "checking" ? (
               <div className="launch-loading" role="status"><LoaderCircle />Checking your Trace session…</div>
             ) : (
-              <Onboarding onContinueLocal={continueLocally} />
+              <Onboarding
+                onContinueLocal={continueLocally}
+                preferences={preferences}
+                resolvedAppearance={resolvedAppearance}
+                onPreferencesChange={updatePreferences}
+              />
             )}
           </main>
         </div>
@@ -2132,6 +2171,9 @@ export default function App() {
           }
           onGoBack={() => navigateHistory(-1)}
           onGoForward={() => navigateHistory(1)}
+          resolvedAppearance={resolvedAppearance}
+          accent={preferences.accent}
+          codeSize={preferences.codeSize}
         />
       </motion.div>
       <Statusbar
@@ -2283,6 +2325,22 @@ export default function App() {
         ) : null}
       </AnimatePresence>
     </div>
+    <PreferencesDialog
+      open={preferencesOpen}
+      preferences={preferences}
+      resolvedAppearance={resolvedAppearance}
+      saveError={preferencesError?.message ?? null}
+      onPreferencesChange={updatePreferences}
+      onClose={() => setPreferencesOpen(false)}
+    />
     </MotionConfig>
+  );
+}
+
+export default function App() {
+  return (
+    <PreferencesProvider>
+      <TraceApp />
+    </PreferencesProvider>
   );
 }

@@ -6,6 +6,8 @@ import {
   type MutableRefObject,
 } from "react";
 import { configureMonaco, monaco } from "./monacoSetup";
+import { accentColor, editorMetrics, monacoThemeName } from "../preferences/presentation";
+import type { Accent, CodeSize, ResolvedAppearance } from "../preferences/types";
 
 export type CursorPosition = {
   line: number;
@@ -49,6 +51,9 @@ type MonacoEditorProps = {
   language: string;
   openPaths: string[];
   readOnly?: boolean;
+  resolvedAppearance: ResolvedAppearance;
+  accent: Accent;
+  codeSize: CodeSize;
   onChange: (path: string, value: string) => void;
   onCursorChange?: (position: CursorPosition) => void;
 };
@@ -90,6 +95,9 @@ export const MonacoEditor = forwardRef<MonacoEditorHandle, MonacoEditorProps>(
       language,
       openPaths,
       readOnly = false,
+      resolvedAppearance,
+      accent,
+      codeSize,
       onChange,
       onCursorChange,
     },
@@ -102,15 +110,20 @@ export const MonacoEditor = forwardRef<MonacoEditorHandle, MonacoEditorProps>(
     const viewStatesRef = useRef(new Map<string, monaco.editor.ICodeEditorViewState | null>());
     const suppressChangeRef = useRef(false);
     const callbacksRef = useRef({ onChange, onCursorChange });
+    const presentationRef = useRef({ resolvedAppearance, accent, codeSize });
 
     callbacksRef.current = { onChange, onCursorChange };
+    presentationRef.current = { resolvedAppearance, accent, codeSize };
 
     useImperativeHandle(ref, () => ({
       focus: () => editorRef.current?.focus(),
       find: () => runEditorAction(editorRef, "actions.find"),
       goToNextProblem: () => runEditorAction(editorRef, "editor.action.marker.next"),
       openCommandPalette: () => runEditorAction(editorRef, "editor.action.quickCommand"),
-      resetZoom: () => editorRef.current?.updateOptions({ fontSize: 14, lineHeight: 20 }),
+      resetZoom: () => {
+        const metrics = editorMetrics(presentationRef.current.codeSize);
+        editorRef.current?.updateOptions(metrics);
+      },
       toggleWordWrap: () => runEditorAction(editorRef, "editor.action.toggleWordWrap"),
       getSelectionRange: () => {
         const selection = editorRef.current?.getSelection();
@@ -159,7 +172,7 @@ export const MonacoEditor = forwardRef<MonacoEditorHandle, MonacoEditorProps>(
             className: "review-line-highlight",
             linesDecorationsClassName: "review-line-marker",
             overviewRuler: {
-              color: "rgba(104, 142, 174, 0.56)",
+              color: `${accentColor(presentationRef.current.accent)}8F`,
               position: monaco.editor.OverviewRulerLane.Center,
             },
           },
@@ -174,18 +187,20 @@ export const MonacoEditor = forwardRef<MonacoEditorHandle, MonacoEditorProps>(
     useEffect(() => {
       if (!containerRef.current) return;
       configureMonaco();
+      const initialPresentation = presentationRef.current;
+      const initialMetrics = editorMetrics(initialPresentation.codeSize);
 
       const editor = monaco.editor.create(containerRef.current, {
-        theme: "trace-light",
+        theme: monacoThemeName(initialPresentation.resolvedAppearance, initialPresentation.accent),
         automaticLayout: true,
         accessibilitySupport: "auto",
         ariaLabel: "Code editor",
         readOnly,
         fontFamily: '"IBM Plex Mono", "SF Mono", Menlo, Monaco, ui-monospace, monospace',
-        fontSize: 14,
+        fontSize: initialMetrics.fontSize,
         fontWeight: "400",
         fontLigatures: false,
-        lineHeight: 20,
+        lineHeight: initialMetrics.lineHeight,
         letterSpacing: 0,
         lineNumbersMinChars: 5,
         lineDecorationsWidth: 16,
@@ -263,6 +278,13 @@ export const MonacoEditor = forwardRef<MonacoEditorHandle, MonacoEditorProps>(
     useEffect(() => {
       editorRef.current?.updateOptions({ readOnly });
     }, [readOnly]);
+
+    useEffect(() => {
+      configureMonaco();
+      monaco.editor.setTheme(monacoThemeName(resolvedAppearance, accent));
+      const metrics = editorMetrics(codeSize);
+      editorRef.current?.updateOptions(metrics);
+    }, [accent, codeSize, resolvedAppearance]);
 
     useEffect(() => {
       const editor = editorRef.current;

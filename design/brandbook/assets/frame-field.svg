@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 640" fill="currentColor" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="trace-frame-field-unit" viewBox="0 0 64 64">
+      <path d="M9 9h34v8H17v26H9z"/>
+      <path d="M55 21v34H21v-8h26V21z"/>
+      <path d="M25 25h14v6H31v8h-6z"/>
+    </symbol>
+    <pattern id="trace-frame-field-pattern" width="192" height="192" patternUnits="userSpaceOnUse">
+      <use href="#trace-frame-field-unit" x="24" y="24" width="88" height="88" opacity=".2"/>
+      <use href="#trace-frame-field-unit" x="128" y="128" width="40" height="40" opacity=".1"/>
+      <use href="#trace-frame-field-unit" x="148" y="20" width="28" height="28" opacity=".08"/>
+      <use href="#trace-frame-field-unit" x="20" y="148" width="28" height="28" opacity=".08"/>
+    </pattern>
+  </defs>
+  <rect width="960" height="640" fill="url(#trace-frame-field-pattern)"/>
+</svg>

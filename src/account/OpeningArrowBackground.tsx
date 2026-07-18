@@ -3,6 +3,7 @@ import {
   useEffect,
   useImperativeHandle,
   useRef,
+  useState,
 } from "react";
 import arrowTileUrl from "../assets/onboarding-onramp-arrow-tile.png";
 import densityMaskUrl from "../assets/onboarding-onramp-density.png";
@@ -20,20 +21,96 @@ export interface OpeningArrowBackgroundHandle {
   clearPointer: () => void;
 }
 
+/**
+ * The opening forms sit above a deliberately dense arrow field. These presets
+ * soften only that arrow layer in a broad, feathered ellipse so text remains
+ * legible without introducing a visible panel or touching the base gradient.
+ */
+export type OpeningReadingField = "none" | "compact" | "expanded";
+
 export const ARROW_REPULSION_CONFIG = {
   radiusPx: 120,
   innerRatio: 0.72,
   minShiftPx: 2,
   maxShiftPx: 6,
-  pointerTimeConstantMs: 45,
-  enterTimeConstantMs: 28,
+  pointerTimeConstantMs: 60,
+  enterTimeConstantMs: 36,
   releaseTimeConstantMs: 36,
   releaseDurationMs: 120,
 } as const;
 
-const MAX_DEVICE_PIXEL_RATIO = 1.5;
+const OPENING_ARTWORK_WIDTH = 1248;
+const OPENING_ARTWORK_HEIGHT = 725;
+const MAX_DEVICE_PIXEL_RATIO = 2;
 const POSITION_EPSILON_PX = 0.05;
 const STRENGTH_EPSILON = 0.002;
+const READING_FIELD_TRANSITION_MS = 180;
+
+function readingFieldStrength(field: OpeningReadingField) {
+  if (field === "compact") return 0.82;
+  if (field === "expanded") return 0.8;
+  return 0;
+}
+
+function writeReadingFieldUniform(
+  target: Float32Array,
+  field: OpeningReadingField,
+  viewportWidth: number,
+  viewportHeight: number,
+) {
+  target[0] = viewportWidth * 0.5;
+  target[1] = viewportHeight * 0.5;
+
+  if (field === "compact") {
+    target[2] = Math.min(Math.max(viewportWidth * 0.34, 250), 360);
+    target[3] = Math.min(Math.max(viewportHeight * 0.5, 250), 360);
+    return readingFieldStrength(field);
+  }
+
+  if (field === "expanded") {
+    target[2] = Math.min(Math.max(viewportWidth * 0.5, 360), 460);
+    target[3] = Math.min(Math.max(viewportHeight * 0.68, 390), 500);
+    return readingFieldStrength(field);
+  }
+
+  // A non-zero radius keeps the shader math well-defined while the zero
+  // strength makes the choice screen visually identical to the original.
+  target[2] = 1;
+  target[3] = 1;
+  return 0;
+}
+
+interface CoverUvTransform {
+  scaleX: number;
+  scaleY: number;
+  offsetX: number;
+  offsetY: number;
+}
+
+function centeredCoverUvTransform(
+  viewportWidth: number,
+  viewportHeight: number,
+): CoverUvTransform {
+  if (viewportWidth <= 0 || viewportHeight <= 0) {
+    return { scaleX: 1, scaleY: 1, offsetX: 0, offsetY: 0 };
+  }
+
+  const artworkAspect = OPENING_ARTWORK_WIDTH / OPENING_ARTWORK_HEIGHT;
+  const viewportAspect = viewportWidth / viewportHeight;
+  const scaleX = viewportAspect < artworkAspect
+    ? viewportAspect / artworkAspect
+    : 1;
+  const scaleY = viewportAspect > artworkAspect
+    ? artworkAspect / viewportAspect
+    : 1;
+
+  return {
+    scaleX,
+    scaleY,
+    offsetX: (1 - scaleX) * 0.5,
+    offsetY: (1 - scaleY) * 0.5,
+  };
+}
 
 const staticPatternStyle = {
   backgroundImage: `url("${arrowTileUrl}")`,
@@ -80,6 +157,11 @@ function smootherstep01(value: number) {
   return unit * unit * unit * (unit * (unit * 6 - 15) + 10);
 }
 
+function smootherstepDerivative01(value: number) {
+  const unit = Math.min(Math.max(value, 0), 1);
+  return 30 * unit * unit * (unit - 1) * (unit - 1);
+}
+
 export function repulsionMagnitude(distancePx: number, strength = 1) {
   const {
     innerRatio,
@@ -100,6 +182,38 @@ export function repulsionMagnitude(distancePx: number, strength = 1) {
   return coreMagnitude
     * (1 - featherProgress)
     * Math.min(Math.max(strength, 0), 1);
+}
+
+export function repulsionCompressionCompensation(
+  distancePx: number,
+  strength = 1,
+) {
+  const {
+    innerRatio,
+    minShiftPx,
+    radiusPx,
+  } = ARROW_REPULSION_CONFIG;
+  const featherStartPx = radiusPx * innerRatio;
+  if (distancePx < featherStartPx || distancePx >= radiusPx) return 1;
+
+  const normalizedDistance = Math.min(
+    Math.max(distancePx / radiusPx, 0),
+    1,
+  );
+  const featherUnit = (normalizedDistance - innerRatio) / (1 - innerRatio);
+  const clampedStrength = Math.min(Math.max(strength, 0), 1);
+  const derivative = -minShiftPx
+    * smootherstepDerivative01(featherUnit)
+    / (radiusPx * (1 - innerRatio))
+    * clampedStrength;
+  const radialScale = 1 + derivative;
+  const tangentialScale = 1
+    + repulsionMagnitude(distancePx, clampedStrength) / distancePx;
+  const jacobian = Math.min(
+    Math.max(radialScale * tangentialScale, 0),
+    1,
+  );
+  return jacobian ** 0.78;
 }
 
 function compileShader(
@@ -188,10 +302,23 @@ function createTexture(
   return texture;
 }
 
-export const OpeningArrowBackground = forwardRef<OpeningArrowBackgroundHandle>(
-  function OpeningArrowBackground(_props, ref) {
+export const OpeningArrowBackground = forwardRef<
+  OpeningArrowBackgroundHandle,
+  { readingField?: OpeningReadingField }
+>(
+  function OpeningArrowBackground({ readingField = "none" }, ref) {
     const rootRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const readingFieldRef = useRef<OpeningReadingField>(readingField);
+    const washClearTimeoutRef = useRef<number | null>(null);
+    const [readingWash, setReadingWash] = useState<OpeningReadingField>(readingField);
+    const [readingWashActive, setReadingWashActive] = useState(
+      readingField !== "none",
+    );
+    const redrawRef = useRef<() => void>(() => undefined);
+    const updateReadingFieldRef = useRef<(field: OpeningReadingField) => void>(
+      () => undefined,
+    );
     const updatePointerRef = useRef<OpeningArrowBackgroundHandle["updatePointer"]>(
       () => undefined,
     );
@@ -249,8 +376,13 @@ export const OpeningArrowBackground = forwardRef<OpeningArrowBackgroundHandle>(
       let targetPointerY = 0;
       let currentStrength = 0;
       let targetStrength = 0;
+      let currentReadingFieldStrength = readingFieldStrength(readingField);
+      let targetReadingFieldStrength = currentReadingFieldStrength;
+      let readingFieldTransitionFrom = currentReadingFieldStrength;
+      let readingFieldTransitionStartedAt: number | null = null;
       let lastFrameTime: number | null = null;
       let releaseStartedAt: number | null = null;
+      let canvasPixelRatio = 0;
       const uniforms: Record<string, WebGLUniformLocation | null> = {};
       const repulsionConfig = new Float32Array([
         ARROW_REPULSION_CONFIG.radiusPx,
@@ -258,6 +390,8 @@ export const OpeningArrowBackground = forwardRef<OpeningArrowBackgroundHandle>(
         ARROW_REPULSION_CONFIG.maxShiftPx,
         ARROW_REPULSION_CONFIG.innerRatio,
       ]);
+      const densityUvTransform = new Float32Array([1, 1, 0, 0]);
+      const readingFieldUniform = new Float32Array(4);
 
       const updateCanvasBounds = () => {
         const bounds = canvas.getBoundingClientRect();
@@ -265,6 +399,13 @@ export const OpeningArrowBackground = forwardRef<OpeningArrowBackgroundHandle>(
         cssTop = bounds.top;
         cssWidth = bounds.width;
         cssHeight = bounds.height;
+        const coverTransform = centeredCoverUvTransform(cssWidth, cssHeight);
+        densityUvTransform.set([
+          coverTransform.scaleX,
+          coverTransform.scaleY,
+          coverTransform.offsetX,
+          coverTransform.offsetY,
+        ]);
       };
 
       const updateTargetFromClientPointer = () => {
@@ -344,10 +485,13 @@ export const OpeningArrowBackground = forwardRef<OpeningArrowBackgroundHandle>(
         [
           "uCssResolution",
           "uDensityTexture",
+          "uDensityUvTransform",
           "uArrowTexture",
           "uPointer",
           "uPointerStrength",
           "uRepulsionConfig",
+          "uReadingField",
+          "uReadingFieldStrength",
         ].forEach(requiredUniform);
 
         gl.bindVertexArray(vertexArray);
@@ -386,6 +530,7 @@ export const OpeningArrowBackground = forwardRef<OpeningArrowBackgroundHandle>(
           window.devicePixelRatio || 1,
           MAX_DEVICE_PIXEL_RATIO,
         );
+        canvasPixelRatio = pixelRatio;
         const width = Math.max(1, Math.round(cssWidth * pixelRatio));
         const height = Math.max(1, Math.round(cssHeight * pixelRatio));
         if (canvas.width !== width || canvas.height !== height) {
@@ -401,6 +546,15 @@ export const OpeningArrowBackground = forwardRef<OpeningArrowBackgroundHandle>(
         gl.uniform2f(uniforms.uPointer, currentPointerX, currentPointerY);
         gl.uniform1f(uniforms.uPointerStrength, currentStrength);
         gl.uniform4fv(uniforms.uRepulsionConfig, repulsionConfig);
+        gl.uniform4fv(uniforms.uDensityUvTransform, densityUvTransform);
+        writeReadingFieldUniform(
+          readingFieldUniform,
+          readingFieldRef.current,
+          cssWidth,
+          cssHeight,
+        );
+        gl.uniform4fv(uniforms.uReadingField, readingFieldUniform);
+        gl.uniform1f(uniforms.uReadingFieldStrength, currentReadingFieldStrength);
 
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, densityTexture);
@@ -416,6 +570,10 @@ export const OpeningArrowBackground = forwardRef<OpeningArrowBackgroundHandle>(
         return true;
       };
 
+      // A screen change has no reason to recreate WebGL resources. It only
+      // redraws the one static frame with the matching reading-field preset.
+      redrawRef.current = draw;
+
       const pointerIsSettled = () => (
         Math.hypot(
           targetPointerX - currentPointerX,
@@ -427,7 +585,15 @@ export const OpeningArrowBackground = forwardRef<OpeningArrowBackgroundHandle>(
         Math.abs(targetStrength - currentStrength) <= STRENGTH_EPSILON
       );
 
-      const motionIsSettled = () => pointerIsSettled() && strengthIsSettled();
+      const readingFieldIsSettled = () => (
+        readingFieldTransitionStartedAt === null
+        && Math.abs(targetReadingFieldStrength - currentReadingFieldStrength)
+          <= STRENGTH_EPSILON
+      );
+
+      const motionIsSettled = () => (
+        pointerIsSettled() && strengthIsSettled() && readingFieldIsSettled()
+      );
 
       const settleMotion = (time: number) => {
         const deltaMs = lastFrameTime !== null ? time - lastFrameTime : 0;
@@ -468,6 +634,20 @@ export const OpeningArrowBackground = forwardRef<OpeningArrowBackgroundHandle>(
         } else if (strengthIsSettled()) {
           currentStrength = targetStrength;
         }
+
+        if (readingFieldTransitionStartedAt !== null) {
+          const progress = Math.min(
+            Math.max((time - readingFieldTransitionStartedAt) / READING_FIELD_TRANSITION_MS, 0),
+            1,
+          );
+          const easedProgress = 1 - (1 - progress) ** 3;
+          currentReadingFieldStrength = readingFieldTransitionFrom
+            + (targetReadingFieldStrength - readingFieldTransitionFrom) * easedProgress;
+          if (progress === 1) {
+            currentReadingFieldStrength = targetReadingFieldStrength;
+            readingFieldTransitionStartedAt = null;
+          }
+        }
       };
 
       const tick = (time: number) => {
@@ -500,6 +680,12 @@ export const OpeningArrowBackground = forwardRef<OpeningArrowBackgroundHandle>(
         draw();
       };
 
+      const settleReadingField = () => {
+        currentReadingFieldStrength = targetReadingFieldStrength;
+        readingFieldTransitionFrom = targetReadingFieldStrength;
+        readingFieldTransitionStartedAt = null;
+      };
+
       const activatePointer = () => {
         updateTargetFromClientPointer();
         if (currentStrength <= STRENGTH_EPSILON && targetStrength === 0) {
@@ -508,6 +694,24 @@ export const OpeningArrowBackground = forwardRef<OpeningArrowBackgroundHandle>(
         }
         targetStrength = 1;
         releaseStartedAt = null;
+        startAnimation();
+      };
+
+      updateReadingFieldRef.current = (field) => {
+        readingFieldRef.current = field;
+        targetReadingFieldStrength = readingFieldStrength(field);
+        if (motionPreference.matches) {
+          settleReadingField();
+          draw();
+          return;
+        }
+        if (readingFieldIsSettled()) {
+          currentReadingFieldStrength = targetReadingFieldStrength;
+          draw();
+          return;
+        }
+        readingFieldTransitionFrom = currentReadingFieldStrength;
+        readingFieldTransitionStartedAt = performance.now();
         startAnimation();
       };
 
@@ -530,6 +734,10 @@ export const OpeningArrowBackground = forwardRef<OpeningArrowBackgroundHandle>(
         if (targetStrength !== 0) {
           targetStrength = 0;
           releaseStartedAt = performance.now();
+          // The field has not moved since its previous frame. Start the
+          // release clock at the leave event so that time before pointerleave
+          // is not incorrectly applied to the fade-out.
+          lastFrameTime = releaseStartedAt;
         }
         startAnimation();
       };
@@ -540,6 +748,14 @@ export const OpeningArrowBackground = forwardRef<OpeningArrowBackgroundHandle>(
         draw();
         startAnimation();
       };
+      const handleWindowResize = () => {
+        const nextPixelRatio = Math.min(
+          window.devicePixelRatio || 1,
+          MAX_DEVICE_PIXEL_RATIO,
+        );
+        if (nextPixelRatio === canvasPixelRatio) return;
+        draw();
+      };
       const handleVisibilityChange = () => {
         if (document.hidden) {
           hasClientPointer = false;
@@ -547,6 +763,7 @@ export const OpeningArrowBackground = forwardRef<OpeningArrowBackgroundHandle>(
           currentStrength = 0;
           releaseStartedAt = null;
           lastFrameTime = null;
+          settleReadingField();
           cancelAnimation();
           return;
         }
@@ -560,6 +777,7 @@ export const OpeningArrowBackground = forwardRef<OpeningArrowBackgroundHandle>(
         hasClientPointer = false;
         targetStrength = 0;
         currentStrength = 0;
+        settleReadingField();
         releaseStartedAt = null;
         lastFrameTime = null;
         clearResourceHandles();
@@ -569,6 +787,7 @@ export const OpeningArrowBackground = forwardRef<OpeningArrowBackgroundHandle>(
       const handleContextRestored = () => {
         contextLost = false;
         try {
+          settleReadingField();
           if (createResources()) draw();
         } catch (error) {
           releaseArrowLayer();
@@ -581,6 +800,7 @@ export const OpeningArrowBackground = forwardRef<OpeningArrowBackgroundHandle>(
 
       const resizeObserver = new ResizeObserver(handleObservedResize);
       resizeObserver.observe(canvas);
+      window.addEventListener("resize", handleWindowResize);
       document.addEventListener("visibilitychange", handleVisibilityChange);
       motionPreference.addEventListener("change", handleMotionChange);
       canvas.addEventListener("webglcontextlost", handleContextLost);
@@ -612,20 +832,62 @@ export const OpeningArrowBackground = forwardRef<OpeningArrowBackgroundHandle>(
         disposed = true;
         cancelAnimation();
         resizeObserver.disconnect();
+        window.removeEventListener("resize", handleWindowResize);
         document.removeEventListener("visibilitychange", handleVisibilityChange);
         motionPreference.removeEventListener("change", handleMotionChange);
         canvas.removeEventListener("webglcontextlost", handleContextLost);
         canvas.removeEventListener("webglcontextrestored", handleContextRestored);
         updatePointerRef.current = () => undefined;
         clearPointerRef.current = () => undefined;
+        redrawRef.current = () => undefined;
+        updateReadingFieldRef.current = () => undefined;
         disposeResources();
       };
     }, []);
+
+    useEffect(() => {
+      readingFieldRef.current = readingField;
+      updateReadingFieldRef.current(readingField);
+    }, [readingField]);
+
+    // Keep the previous gradient mounted while its opacity falls to zero. If
+    // the profile disappeared with the prop, Back would reveal the arrow field
+    // in one frame instead of completing the same 180ms transition as the form.
+    useEffect(() => {
+      if (washClearTimeoutRef.current !== null) {
+        window.clearTimeout(washClearTimeoutRef.current);
+        washClearTimeoutRef.current = null;
+      }
+
+      if (readingField !== "none") {
+        setReadingWash(readingField);
+        setReadingWashActive(true);
+        return;
+      }
+
+      setReadingWashActive(false);
+      if (readingWash !== "none") {
+        washClearTimeoutRef.current = window.setTimeout(() => {
+          setReadingWash("none");
+          washClearTimeoutRef.current = null;
+        }, READING_FIELD_TRANSITION_MS);
+      }
+
+      return () => {
+        if (washClearTimeoutRef.current !== null) {
+          window.clearTimeout(washClearTimeoutRef.current);
+          washClearTimeoutRef.current = null;
+        }
+      };
+    }, [readingField, readingWash]);
 
     return (
       <div
         ref={rootRef}
         className="onboarding-arrow-background"
+        data-reading-field={readingField}
+        data-reading-wash={readingWash}
+        data-reading-wash-active={readingWashActive ? "true" : "false"}
         aria-hidden="true"
       >
         <img

@@ -3,11 +3,11 @@
 }
 
 .tooling-sidebar .search-field > svg:last-child {
-  color: #9aa4ac;
+  color: var(--wb-text-muted);
 }
 
 .tooling-sidebar input:focus-visible {
-  outline: 2px solid rgba(83, 132, 172, 0.52);
+  outline: 2px solid var(--wb-focus);
   outline-offset: -2px;
 }
 
@@ -17,15 +17,15 @@
   justify-content: space-between;
   height: 34px;
   padding: 0 14px;
-  border-top: 1px solid rgba(82, 93, 102, 0.06);
-  border-bottom: 1px solid rgba(82, 93, 102, 0.07);
-  color: #4b535a;
+  border-top: 1px solid var(--wb-border);
+  border-bottom: 1px solid var(--wb-border);
+  color: var(--wb-text);
   font-size: 0.75rem;
   font-weight: 600;
 }
 
 .tooling-heading small {
-  color: #929aa1;
+  color: var(--wb-text-muted);
   font-size: 0.6875rem;
   font-weight: 500;
 }
@@ -34,7 +34,7 @@
   min-height: 0;
   overflow: auto;
   padding: 6px 7px 10px;
-  scrollbar-color: rgba(93, 105, 114, 0.28) transparent;
+  scrollbar-color: color-mix(in srgb, var(--wb-text-muted) 30%, transparent) transparent;
   scrollbar-width: thin;
 }
 
@@ -48,7 +48,7 @@
 }
 
 .tooling-language:hover {
-  background: rgba(224, 232, 237, 0.46);
+  background: var(--wb-surface-hover);
 }
 
 .tooling-language-icon {
@@ -57,7 +57,7 @@
   width: 22px;
   height: 22px;
   border-radius: 5px;
-  background: #7199b8;
+  background: var(--wb-accent);
   color: white;
 }
 
@@ -87,7 +87,7 @@
 
 .tooling-language strong {
   overflow: hidden;
-  color: #3f464c;
+  color: var(--wb-text);
   font-size: 0.8125rem;
   font-weight: 500;
   text-overflow: ellipsis;
@@ -96,7 +96,7 @@
 
 .tooling-language small {
   overflow: hidden;
-  color: #92999f;
+  color: var(--wb-text-muted);
   font-family: "IBM Plex Mono", "SF Mono", monospace;
   font-size: 0.625rem;
   text-overflow: ellipsis;
@@ -106,7 +106,7 @@
 .tooling-enabled {
   display: grid;
   place-items: center;
-  color: #779688;
+  color: var(--wb-success);
 }
 
 .tooling-enabled svg {
@@ -117,7 +117,7 @@
 
 .tooling-empty {
   padding: 26px 12px;
-  color: #969da3;
+  color: var(--wb-text-muted);
   font-size: 0.75rem;
   text-align: center;
 }
@@ -127,9 +127,9 @@
   align-items: flex-start;
   gap: 9px;
   padding: 11px 13px 12px;
-  border-top: 1px solid rgba(82, 93, 102, 0.09);
-  background: rgba(241, 246, 249, 0.64);
-  color: #77828b;
+  border-top: 1px solid var(--wb-border);
+  background: var(--wb-surface-raised);
+  color: var(--wb-text-muted);
 }
 
 .tooling-footer > svg {
@@ -148,7 +148,7 @@
 }
 
 .tooling-footer strong {
-  color: #55616a;
+  color: var(--wb-text);
   font-size: 0.6875rem;
   font-weight: 600;
 }

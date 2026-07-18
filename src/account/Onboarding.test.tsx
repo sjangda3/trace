@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { act } from "react";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -25,6 +25,7 @@ const accountApi = vi.hoisted(() => ({
   pendingInvite: vi.fn(),
   pendingPasswordReset: vi.fn(),
   onDeepLink: vi.fn(),
+  signUp: vi.fn(),
   signIn: vi.fn(),
   listInstallations: vi.fn(),
   requestPasswordReset: vi.fn(),
@@ -68,12 +69,13 @@ vi.mock("./OpeningArrowBackground", async () => {
   const React = await vi.importActual<typeof import("react")>("react");
 
   const OpeningArrowBackground = React.forwardRef(function MockOpeningArrow(
-    _props,
+    props: { readingField?: string },
     ref,
   ) {
     React.useImperativeHandle(ref, () => arrowHarness, []);
     return React.createElement("div", {
       "data-testid": "opening-background",
+      "data-reading-field": props.readingField ?? "none",
       "aria-hidden": "true",
     });
   });
@@ -261,7 +263,7 @@ describe("opening account views", () => {
       initial: { opacity: 0 },
       animate: { opacity: 1 },
       exit: { opacity: 0 },
-      transition: { duration: 0.16, delay: 0.06, ease: "easeOut" },
+      transition: { duration: 0.18, ease: "easeOut" },
     });
   });
 
@@ -277,8 +279,8 @@ describe("opening account views", () => {
     expect(openingView?.getAttribute("aria-hidden")).toBe("true");
     expect(openingView?.hasAttribute("inert")).toBe(true);
     expect(latestOpeningMotion().transition).toEqual({
-      duration: 0.12,
-      ease: "easeIn",
+      duration: 0.18,
+      ease: "easeOut",
     });
   });
 
@@ -425,7 +427,7 @@ describe("opening account views", () => {
       if (choice === "Login") {
         await screen.findByRole("form", { name: "Sign in to Trace" });
       } else {
-        await screen.findByRole("heading", { name: "Sign up" });
+        await screen.findByRole("heading", { name: "What should teammates call you?" });
       }
       arrowHarness.updatePointer.mockClear();
 
@@ -495,27 +497,56 @@ describe("opening account views", () => {
     expect(document.activeElement).toBe(within(form).getByLabelText("Password"));
   });
 
-  it("shows the deferred signup placeholder over the same background", async () => {
+  it("shows the real signup wizard over the same background", async () => {
     const user = userEvent.setup();
     render(<Onboarding onContinueLocal={vi.fn()} />);
     await settleBootstrap();
     const background = screen.getByTestId("opening-background");
 
     await user.click(screen.getByRole("button", { name: "Sign up" }));
-    expect(await screen.findByRole("heading", { name: "Sign up" })).toBeTruthy();
-    expect(screen.getByText("Sign up isn’t available yet.")).toBeTruthy();
+    const form = await screen.findByRole("form", { name: "What should teammates call you?" });
+    expect(within(form).getByLabelText("Name")).toBeTruthy();
+    expect(within(form).getByRole("button", { name: "Next →" })).toBeTruthy();
     expect(screen.getByTestId("opening-background")).toBe(background);
-    expect(screen.queryByRole("form")).toBeNull();
+  });
+
+  it("uses compact for login and expanded reading fields through signup verification", async () => {
+    const user = userEvent.setup();
+    render(<Onboarding onContinueLocal={vi.fn()} />);
+    await settleBootstrap();
+    const background = screen.getByTestId("opening-background");
+    expect(background.getAttribute("data-reading-field")).toBe("none");
+
+    await user.click(screen.getByRole("button", { name: "Login" }));
+    await screen.findByRole("form", { name: "Sign in to Trace" });
+    expect(background.getAttribute("data-reading-field")).toBe("compact");
+
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    await user.click(screen.getByRole("button", { name: "Sign up" }));
+    await screen.findByRole("form", { name: "What should teammates call you?" });
+    expect(background.getAttribute("data-reading-field")).toBe("expanded");
+
+    await user.type(screen.getByLabelText("Name"), "Sameer");
+    await user.click(screen.getByRole("button", { name: "Next →" }));
+    await user.type(screen.getByLabelText("Email"), "sameer@example.com");
+    await user.click(screen.getByRole("button", { name: "Next →" }));
+    await user.type(screen.getByLabelText("Password"), "password-for-testing");
+    await user.type(screen.getByLabelText("Confirm password"), "password-for-testing");
+    await user.click(screen.getByRole("button", { name: "Next →" }));
+    accountApi.signUp.mockResolvedValue({ accepted: true });
+    await user.click(screen.getByRole("button", { name: "Create account →" }));
+    await screen.findByRole("heading", { name: "Check your email" });
+    expect(background.getAttribute("data-reading-field")).toBe("expanded");
   });
 
   it.each(["Back", "Escape"])(
-    "returns from the signup placeholder with %s and restores Login focus",
+    "returns from signup with %s and restores Login focus",
     async (exitMethod) => {
       const user = userEvent.setup();
       render(<Onboarding onContinueLocal={vi.fn()} />);
       await settleBootstrap();
       await user.click(screen.getByRole("button", { name: "Sign up" }));
-      await screen.findByRole("heading", { name: "Sign up" });
+      await screen.findByRole("heading", { name: "What should teammates call you?" });
       arrowHarness.clearPointer.mockClear();
 
       if (exitMethod === "Back") {
@@ -529,6 +560,241 @@ describe("opening account views", () => {
       expect(arrowHarness.clearPointer).toHaveBeenCalled();
     },
   );
+
+  it("submits a whitespace-normalized signup payload and keeps verification on the opening canvas", async () => {
+    accountApi.signUp.mockResolvedValue({ accepted: true });
+    const user = userEvent.setup();
+    render(<Onboarding onContinueLocal={vi.fn()} />);
+    await settleBootstrap();
+    const background = screen.getByTestId("opening-background");
+
+    await user.click(screen.getByRole("button", { name: "Sign up" }));
+    let form = await screen.findByRole("form", { name: "What should teammates call you?" });
+    await user.type(within(form).getByLabelText("Name"), "  Sameer  ");
+    await user.click(within(form).getByRole("button", { name: "Next →" }));
+
+    form = await screen.findByRole("form", { name: "Where should we send your link?" });
+    await user.type(within(form).getByLabelText("Email"), "  sameer@example.com  ");
+    await user.click(within(form).getByRole("button", { name: "Next →" }));
+
+    form = await screen.findByRole("form", { name: "Create a password" });
+    await user.type(within(form).getByLabelText("Password"), "password-for-testing");
+    await user.type(within(form).getByLabelText("Confirm password"), "password-for-testing");
+    await user.click(within(form).getByRole("button", { name: "Next →" }));
+
+    form = await screen.findByRole("form", { name: "Make Trace yours" });
+    await user.click(within(form).getByRole("radio", { name: /^Dark/ }));
+    await user.click(within(form).getByRole("radio", { name: "Violet" }));
+    await user.click(within(form).getByRole("button", { name: "Create account →" }));
+
+    await waitFor(() => expect(accountApi.signUp).toHaveBeenCalledTimes(1));
+    expect(accountApi.signUp).toHaveBeenCalledWith({
+      displayName: "Sameer",
+      email: "sameer@example.com",
+      password: "password-for-testing",
+    });
+    expect(await screen.findByRole("heading", { name: "Check your email" })).toBeTruthy();
+    expect(screen.getByText("sameer@example.com")).toBeTruthy();
+    expect(screen.queryByDisplayValue("password-for-testing")).toBeNull();
+    expect(screen.getByTestId("opening-background")).toBe(background);
+    expect(screen.queryByText("Sign up isn’t available yet.")).toBeNull();
+  });
+
+  it("allows one pending signup request and ignores duplicate, Back, and Escape events", async () => {
+    const pending = deferred<{ accepted: true }>();
+    accountApi.signUp.mockReturnValue(pending.promise);
+    const user = userEvent.setup();
+    render(<Onboarding onContinueLocal={vi.fn()} />);
+    await settleBootstrap();
+
+    await user.click(screen.getByRole("button", { name: "Sign up" }));
+    let form = await screen.findByRole("form", { name: "What should teammates call you?" });
+    await user.type(within(form).getByLabelText("Name"), "Sameer");
+    await user.click(within(form).getByRole("button", { name: "Next →" }));
+    form = await screen.findByRole("form", { name: "Where should we send your link?" });
+    await user.type(within(form).getByLabelText("Email"), "sameer@example.com");
+    await user.click(within(form).getByRole("button", { name: "Next →" }));
+    form = await screen.findByRole("form", { name: "Create a password" });
+    await user.type(within(form).getByLabelText("Password"), "password-for-testing");
+    await user.type(within(form).getByLabelText("Confirm password"), "password-for-testing");
+    await user.click(within(form).getByRole("button", { name: "Next →" }));
+    form = await screen.findByRole("form", { name: "Make Trace yours" });
+    const topBack = screen.getByRole("button", { name: "Back" });
+
+    // Keep all events in one React batch: the pending ref must protect the
+    // opening screen before the state update that renders `busy` commits.
+    act(() => {
+      form.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
+      form.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
+      topBack.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+      window.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+
+    await waitFor(() => expect(accountApi.signUp).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole("form", { name: "Make Trace yours" })).toBe(form);
+    expect((screen.getByRole("button", { name: "Creating account…" }) as HTMLButtonElement).disabled)
+      .toBe(true);
+    expect((screen.getByRole("button", { name: "← Back" }) as HTMLButtonElement).disabled)
+      .toBe(true);
+    expect((screen.getByRole("button", { name: "Back" }) as HTMLButtonElement).disabled)
+      .toBe(true);
+
+    await act(async () => {
+      pending.resolve({ accepted: true });
+      await pending.promise;
+    });
+    expect(await screen.findByRole("heading", { name: "Check your email" })).toBeTruthy();
+  });
+
+  it("keeps a failed signup editable and preserves it for correction and retry", async () => {
+    accountApi.signUp
+      .mockRejectedValueOnce(new TraceAccountError(
+        "EMAIL_ALREADY_EXISTS",
+        "An account already uses that email.",
+      ))
+      .mockResolvedValueOnce({ accepted: true });
+    const user = userEvent.setup();
+    render(<Onboarding onContinueLocal={vi.fn()} />);
+    await settleBootstrap();
+
+    await user.click(screen.getByRole("button", { name: "Sign up" }));
+    let form = await screen.findByRole("form", { name: "What should teammates call you?" });
+    await user.type(within(form).getByLabelText("Name"), "Sameer");
+    await user.click(within(form).getByRole("button", { name: "Next →" }));
+    form = await screen.findByRole("form", { name: "Where should we send your link?" });
+    await user.type(within(form).getByLabelText("Email"), "sameer@example.com");
+    await user.click(within(form).getByRole("button", { name: "Next →" }));
+    form = await screen.findByRole("form", { name: "Create a password" });
+    await user.type(within(form).getByLabelText("Password"), "password-for-testing");
+    await user.type(within(form).getByLabelText("Confirm password"), "password-for-testing");
+    await user.click(within(form).getByRole("button", { name: "Next →" }));
+    form = await screen.findByRole("form", { name: "Make Trace yours" });
+    await user.click(within(form).getByRole("button", { name: "Create account →" }));
+
+    expect((await screen.findByRole("alert")).textContent)
+      .toContain("An account already uses that email.");
+    expect((screen.getByRole("button", { name: "Create account →" }) as HTMLButtonElement).disabled)
+      .toBe(false);
+
+    await user.click(screen.getByRole("button", { name: "← Back" }));
+    form = await screen.findByRole("form", { name: "Create a password" });
+    const password = within(form).getByLabelText("Password") as HTMLInputElement;
+    const confirmation = within(form).getByLabelText("Confirm password") as HTMLInputElement;
+    expect(password.value).toBe("password-for-testing");
+    expect(confirmation.value).toBe("password-for-testing");
+    expect(password.disabled).toBe(false);
+    expect(confirmation.disabled).toBe(false);
+    expect(screen.queryByRole("alert")).toBeNull();
+
+    await user.clear(password);
+    await user.type(password, "corrected-password");
+    await user.clear(confirmation);
+    await user.type(confirmation, "corrected-password");
+    await user.click(within(form).getByRole("button", { name: "Next →" }));
+    form = await screen.findByRole("form", { name: "Make Trace yours" });
+    await user.click(within(form).getByRole("button", { name: "Create account →" }));
+
+    await waitFor(() => expect(accountApi.signUp).toHaveBeenCalledTimes(2));
+    expect(accountApi.signUp).toHaveBeenNthCalledWith(1, {
+      displayName: "Sameer",
+      email: "sameer@example.com",
+      password: "password-for-testing",
+    });
+    expect(accountApi.signUp).toHaveBeenNthCalledWith(2, {
+      displayName: "Sameer",
+      email: "sameer@example.com",
+      password: "corrected-password",
+    });
+    expect(await screen.findByRole("heading", { name: "Check your email" })).toBeTruthy();
+  });
+
+  it("retains signup identity and appearance but clears secrets and errors on a global exit", async () => {
+    accountApi.signUp.mockRejectedValue(new TraceAccountError(
+      "EMAIL_ALREADY_EXISTS",
+      "An account already uses that email.",
+    ));
+    const user = userEvent.setup();
+    render(<Onboarding onContinueLocal={vi.fn()} />);
+    await settleBootstrap();
+
+    await user.click(screen.getByRole("button", { name: "Sign up" }));
+    let form = await screen.findByRole("form", { name: "What should teammates call you?" });
+    await user.type(within(form).getByLabelText("Name"), "Ada Lovelace");
+    await user.click(within(form).getByRole("button", { name: "Next →" }));
+    form = await screen.findByRole("form", { name: "Where should we send your link?" });
+    await user.type(within(form).getByLabelText("Email"), "ada@example.com");
+    await user.click(within(form).getByRole("button", { name: "Next →" }));
+    form = await screen.findByRole("form", { name: "Create a password" });
+    await user.type(within(form).getByLabelText("Password"), "password-for-testing");
+    await user.type(within(form).getByLabelText("Confirm password"), "password-for-testing");
+    await user.click(within(form).getByRole("button", { name: "Next →" }));
+    form = await screen.findByRole("form", { name: "Make Trace yours" });
+    await user.click(within(form).getByRole("radio", { name: /^Dark/ }));
+    await user.click(within(form).getByRole("radio", { name: "Violet" }));
+    await user.click(within(form).getByRole("radio", { name: "Large code" }));
+    await user.click(within(form).getByRole("button", { name: "Create account →" }));
+    expect(await screen.findByRole("alert")).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    const login = await screen.findByRole("button", { name: "Login" });
+    expect(document.activeElement).toBe(login);
+    expect(screen.queryByRole("alert")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Sign up" }));
+    form = await screen.findByRole("form", { name: "What should teammates call you?" });
+    expect((within(form).getByLabelText("Name") as HTMLInputElement).value).toBe("Ada Lovelace");
+    await user.click(within(form).getByRole("button", { name: "Next →" }));
+    form = await screen.findByRole("form", { name: "Where should we send your link?" });
+    expect((within(form).getByLabelText("Email") as HTMLInputElement).value).toBe("ada@example.com");
+    await user.click(within(form).getByRole("button", { name: "Next →" }));
+    form = await screen.findByRole("form", { name: "Create a password" });
+    const password = within(form).getByLabelText("Password") as HTMLInputElement;
+    const confirmation = within(form).getByLabelText("Confirm password") as HTMLInputElement;
+    expect(password.value).toBe("");
+    expect(confirmation.value).toBe("");
+    expect(screen.queryByRole("alert")).toBeNull();
+
+    await user.type(password, "new-password-for-ada");
+    await user.type(confirmation, "new-password-for-ada");
+    await user.click(within(form).getByRole("button", { name: "Next →" }));
+    form = await screen.findByRole("form", { name: "Make Trace yours" });
+    expect((within(form).getByRole("radio", { name: /^Dark/ }) as HTMLInputElement).checked).toBe(true);
+    expect((within(form).getByRole("radio", { name: "Violet" }) as HTMLInputElement).checked).toBe(true);
+    expect((within(form).getByRole("radio", { name: "Large code" }) as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("supports resend and return to sign in from opening verification", async () => {
+    accountApi.signUp.mockResolvedValue({ accepted: true });
+    accountApi.resendVerification.mockResolvedValue({ accepted: true });
+    const user = userEvent.setup();
+    render(<Onboarding onContinueLocal={vi.fn()} />);
+    await settleBootstrap();
+
+    await user.click(screen.getByRole("button", { name: "Sign up" }));
+    let form = await screen.findByRole("form", { name: "What should teammates call you?" });
+    await user.type(within(form).getByLabelText("Name"), "Sameer");
+    await user.click(within(form).getByRole("button", { name: "Next →" }));
+    form = await screen.findByRole("form", { name: "Where should we send your link?" });
+    await user.type(within(form).getByLabelText("Email"), "sameer@example.com");
+    await user.click(within(form).getByRole("button", { name: "Next →" }));
+    form = await screen.findByRole("form", { name: "Create a password" });
+    await user.type(within(form).getByLabelText("Password"), "password-for-testing");
+    await user.type(within(form).getByLabelText("Confirm password"), "password-for-testing");
+    await user.click(within(form).getByRole("button", { name: "Next →" }));
+    form = await screen.findByRole("form", { name: "Make Trace yours" });
+    await user.click(within(form).getByRole("button", { name: "Create account →" }));
+    await screen.findByRole("heading", { name: "Check your email" });
+
+    await user.click(screen.getByRole("button", { name: "Resend verification email" }));
+    expect(accountApi.resendVerification).toHaveBeenCalledWith({ email: "sameer@example.com" });
+    expect((await screen.findByRole("status")).textContent)
+      .toContain("new verification email");
+
+    await user.click(screen.getByRole("button", { name: "Back to sign in" }));
+    const login = await screen.findByRole("form", { name: "Sign in to Trace" });
+    expect((within(login).getByLabelText("Email") as HTMLInputElement).value)
+      .toBe("sameer@example.com");
+  });
 
   it("clears the password and preserves email when opening password reset", async () => {
     const { user, email, password } = await openLogin();
@@ -571,6 +837,20 @@ describe("sign in behavior", () => {
     });
     expect(await screen.findByRole("heading", { name: destinationHeading }))
       .toBeTruthy();
+  });
+
+  it("refreshes verification from the opening canvas into the next account step", async () => {
+    accountApi.signIn.mockResolvedValue({ user: account({ emailVerified: false }) });
+    accountApi.refreshState.mockResolvedValue({ user: account() });
+    const { user, email, password, submit } = await openLogin();
+    await user.type(email, "sameer@example.com");
+    await user.type(password, "password-for-testing");
+    await user.click(submit);
+
+    expect(await screen.findByRole("heading", { name: "Check your email" })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "I verified my email" }));
+    expect(accountApi.refreshState).toHaveBeenCalledTimes(1);
+    expect(await screen.findByRole("heading", { name: "Connect GitHub" })).toBeTruthy();
   });
 
   it("submits the login form with Enter from the password field", async () => {

@@ -14,6 +14,7 @@ const { AnnotationManager } = require("./annotations.cjs");
 const { CollaborationManager } = require("./collaboration.cjs");
 const { WorkspaceSearchManager } = require("./workspace-search.cjs");
 const { TraceAccountManager } = require("./account.cjs");
+const { TracePreferences } = require("./preferences.cjs");
 
 app.setName("Trace");
 if (process.defaultApp && process.argv[1]) {
@@ -30,6 +31,7 @@ let annotationManager;
 let collaborationManager;
 let workspaceSearchManager;
 let accountManager;
+let preferencesManager;
 const approvedWindows = new WeakSet();
 let quitRequested = false;
 let workspaceSwitchPending = false;
@@ -84,6 +86,8 @@ function installMenu() {
       label: "Trace",
       submenu: [
         { role: "about" },
+        { type: "separator" },
+        { label: "Preferences…", accelerator: "CmdOrCtrl+,", click: () => sendRendererCommand("open-preferences") },
         { type: "separator" },
         { role: "services" },
         { type: "separator" },
@@ -645,6 +649,17 @@ function registerAccountIpc() {
   });
 }
 
+function registerPreferencesIpc() {
+  const preferences = () => {
+    if (!preferencesManager) {
+      throw new WorkspaceError("PREFERENCES_UNAVAILABLE", "Trace preferences are unavailable.");
+    }
+    return preferencesManager;
+  };
+  registerResultHandler("preferences:get", async () => preferences().get());
+  registerResultHandler("preferences:set", async (_event, next) => preferences().set(next));
+}
+
 ipcMain.on("window-control", (event, action) => {
   if (!isTrustedSender(event) || !["close", "confirm-close", "cancel-close", "minimize", "zoom"].includes(action)) return;
   const window = BrowserWindow.fromWebContents(event.sender);
@@ -704,6 +719,9 @@ app.whenReady().then(async () => {
     settingsPath: path.join(app.getPath("userData"), "trace-account-session.v1.json"),
     controlPlaneUrl: process.env.TRACE_CONTROL_PLANE_URL?.trim() || "",
   });
+  preferencesManager = new TracePreferences({
+    settingsPath: path.join(app.getPath("userData"), "trace-preferences.v1.json"),
+  });
   annotationManager = new AnnotationManager({
     workspaceManager,
     settingsPath: path.join(app.getPath("userData"), "annotations.v1.json"),
@@ -721,6 +739,7 @@ app.whenReady().then(async () => {
   registerAnnotationIpc();
   registerCollaborationIpc();
   registerAccountIpc();
+  registerPreferencesIpc();
   installMenu();
   createWindow();
 

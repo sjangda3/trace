@@ -58,6 +58,42 @@ test("Electron account bridge preserves local mode when cloud is not configured"
   assert.equal(state.user, null);
 });
 
+test("Electron account bridge sends only the expected POST sign-up payload", async (t) => {
+  const originalFetch = global.fetch;
+  const calls = [];
+  global.fetch = async (url, init = {}) => {
+    calls.push({ url: String(url), init });
+    return new Response(JSON.stringify({ accepted: true }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
+  t.after(() => { global.fetch = originalFetch; });
+
+  const manager = new TraceAccountManager({
+    safeStorage: secureStorage(),
+    shell: { openExternal: async () => undefined },
+    settingsPath: path.join(os.tmpdir(), `trace-sign-up-${crypto.randomUUID()}.json`),
+    controlPlaneUrl: "https://trace.test",
+  });
+  const result = await manager.signUp({
+    displayName: "Sameer",
+    email: "sameer@example.com",
+    password: "password-for-testing",
+  });
+
+  assert.deepEqual(result, { accepted: true });
+  assert.equal(calls.length, 1);
+  const [call] = calls;
+  assert.equal(new URL(call.url).pathname, "/v1/auth/sign-up");
+  assert.equal(call.init.method, "POST");
+  assert.deepEqual(JSON.parse(call.init.body), {
+    email: "sameer@example.com",
+    displayName: "Sameer",
+    password: "password-for-testing",
+  });
+});
+
 test("Electron account bridge keeps a cached verified session available while cloud is offline", async (t) => {
   const directory = await fsp.mkdtemp(path.join(os.tmpdir(), "trace-account-offline-test-"));
   const settingsPath = path.join(directory, "session.json");

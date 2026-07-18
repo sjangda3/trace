@@ -19,6 +19,7 @@ import {
   canUpdateOpeningPointer,
   OpeningArrowBackground,
   type OpeningArrowBackgroundHandle,
+  type OpeningReadingField,
 } from "./OpeningArrowBackground";
 import type { CloudRepository, GitHubAppInstallation, TraceAccount } from "./types";
 import {
@@ -27,13 +28,31 @@ import {
   type OnboardingIntent,
   type OnboardingScreen,
 } from "./onboarding-state";
+import {
+  EMPTY_SIGNUP_DRAFT,
+  SignupWizard,
+  clearSignupPasswordFields,
+  type SignupDraft,
+  type SignupStep,
+} from "./SignupWizard";
+import {
+  DEFAULT_PREFERENCES,
+  type ResolvedAppearance,
+  type TracePreferences,
+} from "../preferences/types";
 
 type Screen = OnboardingScreen | "reset-request" | "reset-confirm" | "repository" | "workspace" | "invite" | "complete";
 type Intent = OnboardingIntent;
-type OpeningScreen = Extract<Screen, "choice" | "sign-in" | "sign-up">;
+type OpeningScreen = Extract<Screen, "choice" | "sign-in" | "sign-up" | "verify">;
 
 function isOpeningScreen(screen: Screen): screen is OpeningScreen {
-  return screen === "choice" || screen === "sign-in" || screen === "sign-up";
+  return screen === "choice" || screen === "sign-in" || screen === "sign-up" || screen === "verify";
+}
+
+function openingReadingFieldFor(screen: Screen): OpeningReadingField {
+  if (screen === "sign-up" || screen === "verify") return "expanded";
+  if (screen === "sign-in") return "compact";
+  return "none";
 }
 
 function OpeningView({
@@ -57,9 +76,7 @@ function OpeningView({
       exit={{ opacity: 0 }}
       transition={reducedMotion
         ? { duration: 0.02 }
-        : isPresent
-          ? { duration: 0.16, delay: 0.06, ease: "easeOut" }
-          : { duration: 0.12, ease: "easeIn" }}
+        : { duration: 0.18, ease: "easeOut" }}
       onAnimationComplete={() => {
         if (isPresent) onEntered();
       }}
@@ -151,7 +168,17 @@ function screenDetails(screen: Screen) {
   };
 }
 
-export function Onboarding({ onContinueLocal }: { onContinueLocal: () => void }) {
+export function Onboarding({
+  onContinueLocal,
+  preferences = DEFAULT_PREFERENCES,
+  resolvedAppearance = "light",
+  onPreferencesChange = () => undefined,
+}: {
+  onContinueLocal: () => void;
+  preferences?: TracePreferences;
+  resolvedAppearance?: ResolvedAppearance;
+  onPreferencesChange?: (next: TracePreferences) => void;
+}) {
   const api = traceAccountApi;
   const [screen, setScreen] = useState<Screen>("choice");
   const [intent, setIntent] = useState<Intent>("owner");
@@ -162,6 +189,10 @@ export function Onboarding({ onContinueLocal }: { onContinueLocal: () => void })
   const [busy, setBusy] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [signupDraft, setSignupDraft] = useState<SignupDraft>(() => ({ ...EMPTY_SIGNUP_DRAFT }));
+  const [signupStep, setSignupStep] = useState<SignupStep>(0);
+  const [signupError, setSignupError] = useState<string | null>(null);
+  const [signupPreferences, setSignupPreferences] = useState<TracePreferences>(preferences);
   const [resetToken, setResetToken] = useState("");
   const [inviteCode, setInviteCode] = useState("");
   const [installations, setInstallations] = useState<GitHubAppInstallation[]>([]);
@@ -179,19 +210,22 @@ export function Onboarding({ onContinueLocal }: { onContinueLocal: () => void })
   const loginButtonRef = useRef<HTMLButtonElement>(null);
   const emailInputRef = useRef<HTMLInputElement>(null);
   const passwordInputRef = useRef<HTMLInputElement>(null);
-  const signupHeadingRef = useRef<HTMLHeadingElement>(null);
+  const verifyHeadingRef = useRef<HTMLHeadingElement>(null);
   const restoreChoiceFocusRef = useRef(false);
   const signInPendingRef = useRef(false);
+  const signUpPendingRef = useRef(false);
 
   const cloudReady = availability === "ready" && Boolean(api);
   const details = useMemo(() => screenDetails(screen), [screen]);
   const activeStep = activeStepFor(screen);
   const isOpeningCanvas = isOpeningScreen(screen);
+  const openingReadingField = openingReadingFieldFor(screen);
   const openingStatusMessage = availability === "loading"
     ? "Checking the Trace account service…"
     : availability === "not-configured"
       ? message ?? "Trace accounts are not configured on this Mac."
       : message;
+  const signupAvailabilityMessage = availability === "ready" ? null : openingStatusMessage;
   const loginDescriptionIds = [
     openingStatusMessage ? "opening-login-status" : null,
     loginError ? "opening-login-error" : null,
@@ -200,6 +234,10 @@ export function Onboarding({ onContinueLocal }: { onContinueLocal: () => void })
   useEffect(() => {
     if (!isOpeningCanvas) headingRef.current?.focus();
   }, [isOpeningCanvas, screen]);
+
+  useEffect(() => {
+    setSignupPreferences(preferences);
+  }, [preferences]);
 
   useEffect(() => {
     if (!api) return;
@@ -294,7 +332,7 @@ export function Onboarding({ onContinueLocal }: { onContinueLocal: () => void })
       target?.focus();
       return;
     }
-    signupHeadingRef.current?.focus();
+    if (openingScreen === "verify") verifyHeadingRef.current?.focus();
   }, []);
 
   const returnToStart = () => {
@@ -311,16 +349,23 @@ export function Onboarding({ onContinueLocal }: { onContinueLocal: () => void })
     setIntent("owner");
     setMessage(null);
     setLoginError(null);
+    if (nextScreen === "sign-up") setSignupError(null);
     openingArrowRef.current?.clearPointer();
     setScreen(nextScreen);
   };
 
   const returnToOpeningChoice = useCallback(() => {
-    if (busy) return;
+    // The refs are set synchronously at the start of an account request. They
+    // close the small window before React has committed `busy`, where Escape
+    // or the top-left Back control could otherwise abandon a pending request.
+    if (busy || signInPendingRef.current || signUpPendingRef.current) return;
     setIntent("owner");
     setMessage(null);
     setLoginError(null);
     setPassword("");
+    setSignupDraft(clearSignupPasswordFields);
+    setSignupError(null);
+    setSignupStep(0);
     restoreChoiceFocusRef.current = true;
     openingArrowRef.current?.clearPointer();
     setScreen("choice");
@@ -345,6 +390,49 @@ export function Onboarding({ onContinueLocal }: { onContinueLocal: () => void })
     }
   };
 
+  const submitSignUp = async () => {
+    if (!api || !cloudReady || signUpPendingRef.current) return;
+    signUpPendingRef.current = true;
+    setBusy(true);
+    setSignupError(null);
+    try {
+      const displayName = signupDraft.displayName.trim();
+      const signUpEmail = signupDraft.email.trim();
+      await api.signUp({
+        displayName,
+        email: signUpEmail,
+        password: signupDraft.password,
+      });
+      setEmail(signUpEmail);
+      setSignupDraft((draft) => ({
+        ...clearSignupPasswordFields(draft),
+        displayName,
+        email: signUpEmail,
+      }));
+      setMessage(null);
+      setScreen("verify");
+    } catch (error) {
+      setSignupError(errorText(error));
+    } finally {
+      signUpPendingRef.current = false;
+      setBusy(false);
+    }
+  };
+
+  const updateSignupPreferences = (next: TracePreferences) => {
+    setSignupPreferences(next);
+    onPreferencesChange(next);
+  };
+
+  const returnToSignIn = () => {
+    if (busy) return;
+    setMessage(null);
+    setLoginError(null);
+    setPassword("");
+    openingArrowRef.current?.clearPointer();
+    setScreen("sign-in");
+  };
+
   const beginPasswordReset = () => {
     if (busy) return;
     setPassword("");
@@ -361,7 +449,12 @@ export function Onboarding({ onContinueLocal }: { onContinueLocal: () => void })
   useEffect(() => {
     if (screen !== "sign-in" && screen !== "sign-up") return;
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || busy) return;
+      if (
+        event.key !== "Escape"
+        || busy
+        || signInPendingRef.current
+        || signUpPendingRef.current
+      ) return;
       returnToOpeningChoice();
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -399,6 +492,8 @@ export function Onboarding({ onContinueLocal }: { onContinueLocal: () => void })
         ? "opening-sign-in-title"
         : screen === "sign-up"
           ? "opening-signup-title"
+          : screen === "verify"
+            ? "opening-verify-title"
           : isOpeningCanvas
             ? undefined
             : "onboarding-title"}
@@ -408,7 +503,10 @@ export function Onboarding({ onContinueLocal }: { onContinueLocal: () => void })
         ? () => openingArrowRef.current?.clearPointer()
         : undefined}
     >
-      {isOpeningCanvas ? <OpeningArrowBackground ref={openingArrowRef} /> : null}
+      {isOpeningCanvas ? <OpeningArrowBackground
+        ref={openingArrowRef}
+        readingField={openingReadingField}
+      /> : null}
       {isOpeningScreen(screen) ? <AnimatePresence initial={false} mode="sync">
         <OpeningView
           key={screen}
@@ -418,7 +516,7 @@ export function Onboarding({ onContinueLocal }: { onContinueLocal: () => void })
             type="button"
             className="onboarding-opening-back"
             disabled={busy}
-            onClick={returnToOpeningChoice}
+            onClick={screen === "verify" ? returnToSignIn : returnToOpeningChoice}
           >
             <ArrowLeft aria-hidden="true" />
             <span>Back</span>
@@ -528,18 +626,68 @@ export function Onboarding({ onContinueLocal }: { onContinueLocal: () => void })
             </button>
           </form> : null}
 
-          {screen === "sign-up" ? <div
-            className="onboarding-opening-placeholder"
-            aria-labelledby="opening-signup-title"
+          {screen === "sign-up" ? <SignupWizard
+            draft={signupDraft}
+            step={signupStep}
+            preferences={signupPreferences}
+            resolvedAppearance={resolvedAppearance}
+            busy={busy}
+            canSubmit={cloudReady}
+            availabilityMessage={signupAvailabilityMessage}
+            // A preference-save failure belongs to the shared Preferences
+            // surface, not the account request. Keeping this channel limited
+            // to signup errors lets a global signup exit genuinely clear its
+            // feedback before the user starts again.
+            serverError={signupError}
+            onDraftChange={(next) => {
+              setSignupDraft(next);
+              setSignupError(null);
+            }}
+            onStepChange={(next) => {
+              setSignupStep(next);
+              setSignupError(null);
+            }}
+            onPreferencesChange={updateSignupPreferences}
+            onSubmit={() => void submitSignUp()}
+          /> : null}
+
+          {screen === "verify" ? <div
+            className="onboarding-opening-form onboarding-opening-verify"
+            aria-labelledby="opening-verify-title"
+            aria-busy={busy}
           >
-            <h1
-              ref={signupHeadingRef}
-              id="opening-signup-title"
-              tabIndex={-1}
+            <h1 id="opening-verify-title" ref={verifyHeadingRef} tabIndex={-1}>Check your email</h1>
+            <p className="onboarding-opening-verify-copy">
+              Check <strong>{email || "your inbox"}</strong> for a verification link. Once it opens in your browser, return here.
+            </p>
+            {openingStatusMessage ? <p className="onboarding-opening-feedback" role="status" aria-live="polite">
+              {openingStatusMessage}
+            </p> : null}
+            <button
+              type="button"
+              className="onboarding-opening-submit"
+              disabled={busy || !api}
+              onClick={() => void run(refreshAccount)}
             >
-              Sign up
-            </h1>
-            <p>Sign up isn’t available yet.</p>
+              {busy ? "Checking…" : "I verified my email"}
+            </button>
+            <div className="onboarding-opening-verify-actions">
+              <button
+                type="button"
+                className="onboarding-opening-link"
+                disabled={busy || !api || !email}
+                onClick={() => void run(async () => {
+                  if (!api) return;
+                  await api.resendVerification({ email });
+                  setMessage("A new verification email is on its way.");
+                })}
+              >
+                Resend verification email
+              </button>
+              <button type="button" className="onboarding-opening-link" disabled={busy} onClick={returnToSignIn}>
+                Back to sign in
+              </button>
+            </div>
           </div> : null}
         </OpeningView>
       </AnimatePresence> : null}
@@ -590,15 +738,6 @@ export function Onboarding({ onContinueLocal }: { onContinueLocal: () => void })
 
             <AnimatePresence mode="wait" initial={false}>
               <motion.div key={screen} className="onboarding-body" aria-busy={busy} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.12, ease: "easeOut" }}>
-            {screen === "verify" ? <>
-              <p className="onboarding-detail">Check <strong>{email || "your inbox"}</strong> for a verification link. Once it opens in your browser, return here.</p>
-              <button className="onboarding-primary" disabled={busy} onClick={() => void run(refreshAccount)}>{busy ? "Checking…" : "I verified my email"}</button>
-              <div className="onboarding-form-links">
-                <button type="button" className="onboarding-text-button" disabled={busy || !email} onClick={() => void run(async () => { if (!api) return; await api.resendVerification({ email }); setMessage("A new verification email is on its way."); })}>Resend verification email</button>
-                <button type="button" className="onboarding-text-button" onClick={() => setScreen("sign-in")}>Back to sign in</button>
-              </div>
-            </> : null}
-
             {screen === "reset-request" ? <form onSubmit={(event) => { event.preventDefault(); void run(async () => { if (!api) return; await api.requestPasswordReset({ email }); setMessage("If that account exists, a reset link is on its way."); setScreen("reset-confirm"); }); }}>
               <label>Email<input required type="email" value={email} autoComplete="email" onChange={(event) => setEmail(event.target.value)} /></label>
               <button className="onboarding-primary" disabled={busy}>{busy ? "Sending…" : "Send reset link"}</button>

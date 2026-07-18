@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 480" fill="currentColor" aria-hidden="true" focusable="false">
+  <path d="M0 0h480v32H32v288H0z" opacity=".16"/>
+  <path d="M1200 480H720v-32h448V160h32z" opacity=".16"/>
+
+  <path d="M72 72h312v20H92v180H72z" opacity=".32"/>
+  <path d="M144 144h176v14H158v104h-14z" opacity=".58"/>
+  <path d="M1128 408H816v-20h292V208h20z" opacity=".32"/>
+  <path d="M1056 336H880v-14h162V218h14z" opacity=".58"/>
+
+  <path d="M540 176h120v20H560v80h-20z"/>
+  <path d="M660 304H540v-20h100v-80h20z" opacity=".72"/>
+
+  <path d="M32 344h488M680 136h488M520 32v120M680 328v120" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="2 10" opacity=".2"/>
+</svg>

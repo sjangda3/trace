@@ -11,11 +11,22 @@ from PIL import Image, ImageDraw, ImageFilter
 
 REFERENCE_WIDTH = 1170
 REFERENCE_HEIGHT = 876
+LOGICAL_WIDTH = 1248
+LOGICAL_HEIGHT = 725
+MEASURED_WIDTH = 968
+SIDE_EXTENSION_WIDTH = 140
+OUTPUT_SCALE = 2
+OUTPUT_WIDTH = LOGICAL_WIDTH * OUTPUT_SCALE
+OUTPUT_HEIGHT = LOGICAL_HEIGHT * OUTPUT_SCALE
+EXTENSION_SEAM_BLEND_PX = 32
 PERIOD_SIZE = 40
 PERIOD_SCALE = 3
 ARROW_COLOR = np.array((225.0, 240.0, 255.0), dtype=np.float32)
 ALS_BLUR_RADIUS = 6
 ALS_ITERATIONS = 5
+EDGE_DENSITY_SHIFT_PX = 14.0
+TOP_EDGE_BLEND_END_PX = 220.0
+BOTTOM_EDGE_BLEND_START_PX = 736.0
 
 # Coordinates are relative to the designed page crop after removing the
 # screenshot's one-pixel side frame and sixteen-pixel black top strip.
@@ -144,6 +155,99 @@ def harmonic_inpaint(
     return result[:, :, 0] if values.ndim == 2 else result
 
 
+def resize_float_lanczos(
+    values: np.ndarray,
+    width: int,
+    height: int,
+) -> np.ndarray:
+    """Resize a scalar or channel-last float grid without quantizing it."""
+
+    source = values[:, :, None] if values.ndim == 2 else values
+    channels = [
+        np.asarray(
+            Image.fromarray(source[:, :, channel].astype(np.float32)).resize(
+                (width, height),
+                Image.Resampling.LANCZOS,
+            ),
+            dtype=np.float32,
+        )
+        for channel in range(source.shape[2])
+    ]
+    resized = np.stack(channels, axis=2)
+    return resized[:, :, 0] if values.ndim == 2 else resized
+
+
+def build_logical_master(values: np.ndarray) -> np.ndarray:
+    """Fit the measured layer into the default window without distortion.
+
+    The complete measured height is scaled uniformly into the 725px logical
+    surface. The remaining 140px on either side is reconstructed from the
+    measured boundary conditions with the same harmonic solver used for
+    foreground removal. A short interior feather removes any coarse-grid
+    derivative change without mirroring or stretching the source.
+    """
+
+    measured = resize_float_lanczos(
+        values,
+        MEASURED_WIDTH,
+        LOGICAL_HEIGHT,
+    )
+    source = measured[:, :, None] if measured.ndim == 2 else measured
+    channels = source.shape[2]
+    canvas = np.zeros(
+        (LOGICAL_HEIGHT, LOGICAL_WIDTH, channels),
+        dtype=np.float32,
+    )
+    measured_left = SIDE_EXTENSION_WIDTH
+    measured_right = measured_left + MEASURED_WIDTH
+    canvas[:, measured_left:measured_right] = source
+
+    visible = np.zeros((LOGICAL_HEIGHT, LOGICAL_WIDTH), dtype=bool)
+    visible[:, measured_left:measured_right] = True
+    reconstructed = harmonic_inpaint(
+        canvas[:, :, 0] if values.ndim == 2 else canvas,
+        visible,
+    )
+    reconstruction = (
+        reconstructed[:, :, None] if values.ndim == 2 else reconstructed
+    )
+
+    measured_x = np.arange(MEASURED_WIDTH, dtype=np.float32)
+    distance_to_edge = np.minimum(
+        measured_x,
+        float(MEASURED_WIDTH - 1) - measured_x,
+    )
+    measured_weight = smootherstep(
+        0.0,
+        float(EXTENSION_SEAM_BLEND_PX),
+        distance_to_edge,
+    )[None, :, None]
+    reconstruction[:, measured_left:measured_right] = (
+        reconstruction[:, measured_left:measured_right]
+        * (1.0 - measured_weight)
+        + source * measured_weight
+    )
+    return (
+        reconstruction[:, :, 0]
+        if values.ndim == 2
+        else reconstruction
+    )
+
+
+def seam_diagnostics(
+    values: np.ndarray,
+    seam_x: int,
+) -> tuple[float, float]:
+    """Return mean value delta and p95 slope change at a vertical seam."""
+
+    source = values[:, :, None] if values.ndim == 2 else values
+    value_delta = np.abs(source[:, seam_x] - source[:, seam_x - 1])
+    left_slope = source[:, seam_x - 1] - source[:, seam_x - 2]
+    right_slope = source[:, seam_x] - source[:, seam_x - 1]
+    slope_delta = np.abs(right_slope - left_slope)
+    return float(value_delta.mean()), float(np.percentile(slope_delta, 95.0))
+
+
 def blur_unit(values: np.ndarray, radius: float) -> np.ndarray:
     image = Image.fromarray(
         np.uint8(np.clip(values, 0.0, 1.0) * 255.0)
@@ -169,6 +273,44 @@ def blur_signed(values: np.ndarray, radius: float) -> np.ndarray:
 def smoothstep(edge0: float, edge1: float, values: np.ndarray) -> np.ndarray:
     unit = np.clip((values - edge0) / (edge1 - edge0), 0.0, 1.0)
     return unit * unit * (3.0 - 2.0 * unit)
+
+
+def smootherstep(edge0: float, edge1: float, values: np.ndarray) -> np.ndarray:
+    unit = np.clip((values - edge0) / (edge1 - edge0), 0.0, 1.0)
+    return unit * unit * unit * (unit * (unit * 6.0 - 15.0) + 10.0)
+
+
+def compact_density_edge_bands(density: np.ndarray) -> np.ndarray:
+    """Bring the arrow field subtly closer to the top and bottom edges.
+
+    The source reference reserves broad quiet bands at both edges. Sampling
+    fourteen pixels inward at the literal edges, then easing that offset back
+    to zero, trims those bands without moving the gradient or introducing a
+    hard density seam.
+    """
+
+    height = density.shape[0]
+    rows = np.arange(height, dtype=np.float32)
+    top_weight = 1.0 - smootherstep(0.0, TOP_EDGE_BLEND_END_PX, rows)
+    bottom_weight = smootherstep(
+        BOTTOM_EDGE_BLEND_START_PX,
+        float(height - 1),
+        rows,
+    )
+    source_rows = np.clip(
+        rows
+        + EDGE_DENSITY_SHIFT_PX * top_weight
+        - EDGE_DENSITY_SHIFT_PX * bottom_weight,
+        0.0,
+        float(height - 1),
+    )
+    lower_rows = np.floor(source_rows).astype(np.int32)
+    upper_rows = np.minimum(lower_rows + 1, height - 1)
+    blend = (source_rows - lower_rows)[:, None]
+    return (
+        density[lower_rows] * (1.0 - blend)
+        + density[upper_rows] * blend
+    )
 
 
 def make_initial_field(
@@ -377,6 +519,34 @@ def generate(source_path: Path, output_dir: Path) -> None:
         visible,
         soft_mask,
     )
+    density = compact_density_edge_bands(density)
+
+    yy, xx = np.indices(visible.shape)
+    phase = (
+        ((PERIOD_SCALE * yy + 1) % PERIOD_SIZE) * PERIOD_SIZE
+        + ((PERIOD_SCALE * xx + 1) % PERIOD_SIZE)
+    )
+    effective_alpha = motif.ravel()[phase] * density
+    composite = field + effective_alpha[:, :, None] * (
+        ARROW_COLOR[None, None, :] - field
+    )
+
+    logical_field = build_logical_master(field)
+    logical_density = np.clip(build_logical_master(density), 0.0, 1.0)
+    output_field = resize_float_lanczos(
+        logical_field,
+        OUTPUT_WIDTH,
+        OUTPUT_HEIGHT,
+    )
+    output_density = np.clip(
+        resize_float_lanczos(
+            logical_density,
+            OUTPUT_WIDTH,
+            OUTPUT_HEIGHT,
+        ),
+        0.0,
+        1.0,
+    )
 
     tile = np.empty((PERIOD_SIZE, PERIOD_SIZE, 4), dtype=np.uint8)
     tile[:, :, :3] = np.uint8(ARROW_COLOR)
@@ -387,19 +557,18 @@ def generate(source_path: Path, output_dir: Path) -> None:
     )
 
     density_rgba = np.full(
-        (REFERENCE_HEIGHT, REFERENCE_WIDTH, 4),
+        (OUTPUT_HEIGHT, OUTPUT_WIDTH, 4),
         255,
         dtype=np.uint8,
     )
-    density_rgba[:, :, 3] = np.uint8(np.clip(density, 0.0, 1.0) * 255.0)
+    density_rgba[:, :, 3] = np.uint8(output_density * 255.0)
     Image.fromarray(density_rgba).save(
         output_dir / "onboarding-onramp-density.png",
         optimize=True,
     )
-    Image.fromarray(np.uint8(np.clip(field, 0.0, 255.0))).save(
-        output_dir / "onboarding-onramp-field.png",
-        optimize=True,
-    )
+    Image.fromarray(
+        np.uint8(np.clip(output_field, 0.0, 255.0))
+    ).save(output_dir / "onboarding-onramp-field.png", optimize=True)
 
     metric_visible = np.ones((REFERENCE_HEIGHT, REFERENCE_WIDTH), dtype=bool)
     for left, top, right, bottom in FOREGROUND_RECTS:
@@ -410,6 +579,26 @@ def generate(source_path: Path, output_dir: Path) -> None:
         "masked_rmse="
         f"{np.sqrt(np.mean((target - composite)[metric_visible] ** 2)):.6f}"
     )
+    print(
+        "output_size="
+        f"{output_field.shape[1]}x{output_field.shape[0]}"
+    )
+    for seam_x in (
+        SIDE_EXTENSION_WIDTH,
+        SIDE_EXTENSION_WIDTH + MEASURED_WIDTH,
+    ):
+        field_value, field_slope = seam_diagnostics(logical_field, seam_x)
+        density_value, density_slope = seam_diagnostics(
+            logical_density,
+            seam_x,
+        )
+        print(
+            f"seam_x={seam_x} "
+            f"field_mean_delta={field_value:.6f} "
+            f"field_p95_slope_delta={field_slope:.6f} "
+            f"density_mean_delta={density_value:.6f} "
+            f"density_p95_slope_delta={density_slope:.6f}"
+        )
 
 
 def main() -> None:

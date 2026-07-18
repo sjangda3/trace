@@ -1,0 +1,38 @@
+export {
+  ElectronPreferencesApi,
+  MemoryPreferencesApi,
+  PreferencesApiError,
+  createPreferencesApi,
+  tracePreferencesApi,
+  type PreferencesApi,
+} from "./api";
+export {
+  PreferencesProvider,
+  SYSTEM_DARK_MODE_QUERY,
+  applyPreferencesToRoot,
+  resolveAppearance,
+  usePreferences,
+  type PreferencesContextValue,
+  type PreferencesProviderProps,
+} from "./PreferencesProvider";
+export {
+  ACCENT_OPTIONS,
+  APPEARANCE_OPTIONS,
+  CODE_SIZE_OPTIONS,
+  DEFAULT_PREFERENCES,
+  isAccentPreference,
+  isAppearancePreference,
+  isCodeSizePreference,
+  normalizePreferences,
+  type Accent,
+  type AccentPreference,
+  type Appearance,
+  type AppearancePreference,
+  type AppPreferences,
+  type CodeSize,
+  type CodeSizePreference,
+  type PreferencesRecord,
+  type ResolvedAppearance,
+  type TracePreferences,
+  type TracePreferencesBridge,
+} from "./types";
