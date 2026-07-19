@@ -769,7 +769,7 @@ describe("OpeningArrowBackground WebGL lifecycle", () => {
     expect(animationFrames.size).toBe(0);
   });
 
-  it("transitions only reading-field strength for 180ms and then returns to idle", async () => {
+  it("transitions only reading-field strength for 240ms and then returns to idle", async () => {
     const { rerender } = await mountRenderer();
     const initialDraws = vi.mocked(harness.gl.drawArrays).mock.calls.length;
 
@@ -786,7 +786,7 @@ describe("OpeningArrowBackground WebGL lifecycle", () => {
       .toBeLessThan(0.82);
 
     const framesRun = runUntilIdle();
-    expect(framesRun).toBeLessThan(8);
+    expect(framesRun).toBeLessThan(12);
     expect(latestUniform(harness.uniform1fSnapshots, "uReadingFieldStrength"))
       .toEqual([0.82]);
     expect(animationFrames.size).toBe(0);
@@ -1235,7 +1235,9 @@ describe("opening action styling", () => {
     expect(washRule).toMatch(/inset:\s*0/);
     expect(washRule).toMatch(/z-index:\s*3/);
     expect(washRule).toMatch(/pointer-events:\s*none/);
-    expect(washRule).toMatch(/transition:\s*opacity 180ms ease-out/);
+    expect(washRule).toMatch(
+      /transition:\s*opacity var\(--opening-scene-duration, 240ms\) cubic-bezier\(0\.42, 0, 0\.58, 1\)/,
+    );
     expect(washRule).not.toMatch(/(?:border|box-shadow|filter|backdrop-filter|border-radius)/);
     expect(compactRule).toMatch(/radial-gradient\(\s*ellipse 34% 60% at 50% 50%/s);
     expect(expandedRule).toMatch(/radial-gradient\(\s*ellipse 49% 82% at 50% 50%/s);

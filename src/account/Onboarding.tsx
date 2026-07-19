@@ -10,6 +10,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
@@ -32,6 +33,7 @@ import {
   EMPTY_SIGNUP_DRAFT,
   SignupWizard,
   clearSignupPasswordFields,
+  signupDisplayName,
   type SignupDraft,
   type SignupStep,
 } from "./SignupWizard";
@@ -40,6 +42,14 @@ import {
   type ResolvedAppearance,
   type TracePreferences,
 } from "../preferences/types";
+import {
+  OPENING_CHOICE_EXIT_DURATION_MS,
+  OPENING_CONTENT_EASE,
+  OPENING_FORM_ENTRY_DELAY_MS,
+  OPENING_FORM_ENTRY_DURATION_MS,
+  OPENING_SCENE_DURATION_MS,
+} from "./opening-motion";
+import traceFrameUrl from "../../design/trace-frame.svg?url";
 
 type Screen = OnboardingScreen | "reset-request" | "reset-confirm" | "repository" | "workspace" | "invite" | "complete";
 type Intent = OnboardingIntent;
@@ -55,28 +65,50 @@ function openingReadingFieldFor(screen: Screen): OpeningReadingField {
   return "none";
 }
 
-function OpeningView({
+function openingStageTransition(
+  reducedMotion: boolean | null,
+  enteredFromChoice: boolean,
+  isPresent: boolean,
+) {
+  if (reducedMotion) return { duration: 0 };
+  if (!isPresent) {
+    return {
+      duration: OPENING_CHOICE_EXIT_DURATION_MS / 1000,
+      ease: OPENING_CONTENT_EASE,
+    };
+  }
+  if (enteredFromChoice) {
+    return {
+      delay: OPENING_FORM_ENTRY_DELAY_MS / 1000,
+      duration: OPENING_FORM_ENTRY_DURATION_MS / 1000,
+      ease: OPENING_CONTENT_EASE,
+    };
+  }
+  return { duration: 0.14, ease: OPENING_CONTENT_EASE };
+}
+
+function OpeningFormStage({
   children,
   onEntered,
+  enteredFromChoice,
 }: {
   children: ReactNode;
   onEntered: () => void;
+  enteredFromChoice: boolean;
 }) {
   const isPresent = useIsPresent();
   const reducedMotion = useReducedMotion();
 
   return (
     <motion.div
-      className="onboarding-opening-view"
+      className="onboarding-opening-form-stage"
       data-present={isPresent ? "true" : "false"}
       inert={isPresent ? undefined : true}
       aria-hidden={isPresent ? undefined : true}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={reducedMotion
-        ? { duration: 0.02 }
-        : { duration: 0.18, ease: "easeOut" }}
+      transition={openingStageTransition(reducedMotion, enteredFromChoice, isPresent)}
       onAnimationComplete={() => {
         if (isPresent) onEntered();
       }}
@@ -212,6 +244,10 @@ export function Onboarding({
   const passwordInputRef = useRef<HTMLInputElement>(null);
   const verifyHeadingRef = useRef<HTMLHeadingElement>(null);
   const restoreChoiceFocusRef = useRef(false);
+  const openingTransitionRef = useRef<{
+    source: OpeningScreen;
+    target: OpeningScreen;
+  }>({ source: "choice", target: "choice" });
   const signInPendingRef = useRef(false);
   const signUpPendingRef = useRef(false);
 
@@ -220,6 +256,46 @@ export function Onboarding({
   const activeStep = activeStepFor(screen);
   const isOpeningCanvas = isOpeningScreen(screen);
   const openingReadingField = openingReadingFieldFor(screen);
+  const reducedOpeningMotion = useReducedMotion();
+  if (isOpeningCanvas && openingTransitionRef.current.target !== screen) {
+    openingTransitionRef.current = {
+      source: openingTransitionRef.current.target,
+      target: screen,
+    };
+  }
+  const enteredOpeningFormFromChoice = isOpeningCanvas
+    && screen !== "choice"
+    && openingTransitionRef.current.source === "choice";
+  const enteredOpeningChoiceFromForm = screen === "choice"
+    && openingTransitionRef.current.source !== "choice";
+  const openingChoiceTransition = reducedOpeningMotion
+    ? { duration: 0 }
+    : screen === "choice"
+      ? enteredOpeningChoiceFromForm
+        ? {
+          delay: OPENING_FORM_ENTRY_DELAY_MS / 1000,
+          duration: OPENING_FORM_ENTRY_DURATION_MS / 1000,
+          ease: OPENING_CONTENT_EASE,
+        }
+        : { duration: 0 }
+      : {
+        duration: OPENING_CHOICE_EXIT_DURATION_MS / 1000,
+        ease: OPENING_CONTENT_EASE,
+      };
+  const openingBackTransition = reducedOpeningMotion
+    ? { duration: 0 }
+    : screen === "choice"
+      ? {
+        duration: OPENING_CHOICE_EXIT_DURATION_MS / 1000,
+        ease: OPENING_CONTENT_EASE,
+      }
+      : enteredOpeningFormFromChoice
+        ? {
+          delay: OPENING_FORM_ENTRY_DELAY_MS / 1000,
+          duration: OPENING_FORM_ENTRY_DURATION_MS / 1000,
+          ease: OPENING_CONTENT_EASE,
+        }
+        : { duration: 0.14, ease: OPENING_CONTENT_EASE };
   const openingStatusMessage = availability === "loading"
     ? "Checking the Trace account service…"
     : availability === "not-configured"
@@ -396,7 +472,7 @@ export function Onboarding({
     setBusy(true);
     setSignupError(null);
     try {
-      const displayName = signupDraft.displayName.trim();
+      const displayName = signupDisplayName(signupDraft);
       const signUpEmail = signupDraft.email.trim();
       await api.signUp({
         displayName,
@@ -406,7 +482,8 @@ export function Onboarding({
       setEmail(signUpEmail);
       setSignupDraft((draft) => ({
         ...clearSignupPasswordFields(draft),
-        displayName,
+        firstName: draft.firstName.trim(),
+        lastName: draft.lastName.trim(),
         email: signUpEmail,
       }));
       setMessage(null);
@@ -507,22 +584,35 @@ export function Onboarding({
         ref={openingArrowRef}
         readingField={openingReadingField}
       /> : null}
-      {isOpeningScreen(screen) ? <AnimatePresence initial={false} mode="sync">
-        <OpeningView
-          key={screen}
-          onEntered={() => focusOpeningView(screen)}
+      {isOpeningScreen(screen) ? <div
+        className="onboarding-opening-scene"
+        style={{ "--opening-scene-duration": `${OPENING_SCENE_DURATION_MS}ms` } as CSSProperties}
+      >
+        <motion.div
+          className="onboarding-opening-choice-stage"
+          data-active={screen === "choice" ? "true" : "false"}
+          inert={screen === "choice" ? undefined : true}
+          aria-hidden={screen === "choice" ? undefined : true}
+          initial={false}
+          animate={{ opacity: screen === "choice" ? 1 : 0 }}
+          transition={openingChoiceTransition}
+          onAnimationComplete={() => {
+            if (screen === "choice") focusOpeningView("choice");
+          }}
         >
-          {screen !== "choice" ? <button
-            type="button"
-            className="onboarding-opening-back"
-            disabled={busy}
-            onClick={screen === "verify" ? returnToSignIn : returnToOpeningChoice}
-          >
-            <ArrowLeft aria-hidden="true" />
-            <span>Back</span>
-          </button> : null}
-
-          {screen === "choice" ? <div
+          <div className="onboarding-opening-lockup">
+            <img
+              className="onboarding-opening-lockup__mark"
+              src={traceFrameUrl}
+              alt=""
+              aria-hidden="true"
+              width="25"
+              height="25"
+              draggable={false}
+            />
+            <span>Trace</span>
+          </div>
+          <div
             className="onboarding-opening-actions"
             role="group"
             aria-label="Account access"
@@ -542,8 +632,36 @@ export function Onboarding({
             >
               Sign up
             </button>
-          </div> : null}
+          </div>
+        </motion.div>
 
+        <motion.div
+          className="onboarding-opening-back-stage"
+          data-active={screen === "choice" ? "false" : "true"}
+          inert={screen === "choice" ? true : undefined}
+          aria-hidden={screen === "choice" ? true : undefined}
+          initial={false}
+          animate={{ opacity: screen === "choice" ? 0 : 1 }}
+          transition={openingBackTransition}
+        >
+          <button
+            type="button"
+            className="onboarding-opening-back"
+            disabled={busy || screen === "choice"}
+            tabIndex={screen === "choice" ? -1 : undefined}
+            onClick={screen === "verify" ? returnToSignIn : returnToOpeningChoice}
+          >
+            <ArrowLeft aria-hidden="true" />
+            <span>Back</span>
+          </button>
+        </motion.div>
+
+        <AnimatePresence initial={false} mode="sync">
+          {screen !== "choice" ? <OpeningFormStage
+            key={screen}
+            enteredFromChoice={enteredOpeningFormFromChoice}
+            onEntered={() => focusOpeningView(screen)}
+          >
           {screen === "sign-in" ? <form
             className="onboarding-opening-form"
             aria-labelledby="opening-sign-in-title"
@@ -689,8 +807,9 @@ export function Onboarding({
               </button>
             </div>
           </div> : null}
-        </OpeningView>
-      </AnimatePresence> : null}
+          </OpeningFormStage> : null}
+        </AnimatePresence>
+      </div> : null}
       {!isOpeningCanvas ? <motion.div className="onboarding-shell" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.14, ease: "easeOut" }}>
         <aside className="onboarding-rail" aria-label="Setup progress">
           <div className="onboarding-brand">

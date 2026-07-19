@@ -2,6 +2,7 @@ import {
   forwardRef,
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
@@ -10,6 +11,7 @@ import densityMaskUrl from "../assets/onboarding-onramp-density.png";
 import fieldUrl from "../assets/onboarding-onramp-field.png";
 import fragmentShaderSource from "./shaders/opening-background.frag.glsl?raw";
 import vertexShaderSource from "./shaders/opening-background.vert.glsl?raw";
+import { OPENING_SCENE_DURATION_MS } from "./opening-motion";
 
 export interface PointerPoint {
   x: number;
@@ -44,7 +46,7 @@ const OPENING_ARTWORK_HEIGHT = 725;
 const MAX_DEVICE_PIXEL_RATIO = 2;
 const POSITION_EPSILON_PX = 0.05;
 const STRENGTH_EPSILON = 0.002;
-const READING_FIELD_TRANSITION_MS = 180;
+const READING_FIELD_TRANSITION_MS = OPENING_SCENE_DURATION_MS;
 
 function readingFieldStrength(field: OpeningReadingField) {
   if (field === "compact") return 0.82;
@@ -640,7 +642,7 @@ export const OpeningArrowBackground = forwardRef<
             Math.max((time - readingFieldTransitionStartedAt) / READING_FIELD_TRANSITION_MS, 0),
             1,
           );
-          const easedProgress = 1 - (1 - progress) ** 3;
+          const easedProgress = smootherstep01(progress);
           currentReadingFieldStrength = readingFieldTransitionFrom
             + (targetReadingFieldStrength - readingFieldTransitionFrom) * easedProgress;
           if (progress === 1) {
@@ -845,15 +847,15 @@ export const OpeningArrowBackground = forwardRef<
       };
     }, []);
 
-    useEffect(() => {
+    useLayoutEffect(() => {
       readingFieldRef.current = readingField;
       updateReadingFieldRef.current(readingField);
     }, [readingField]);
 
     // Keep the previous gradient mounted while its opacity falls to zero. If
     // the profile disappeared with the prop, Back would reveal the arrow field
-    // in one frame instead of completing the same 180ms transition as the form.
-    useEffect(() => {
+    // in one frame instead of completing the same 240ms transition as the form.
+    useLayoutEffect(() => {
       if (washClearTimeoutRef.current !== null) {
         window.clearTimeout(washClearTimeoutRef.current);
         washClearTimeoutRef.current = null;

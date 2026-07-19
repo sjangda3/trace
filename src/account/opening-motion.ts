@@ -1,0 +1,6 @@
+export const OPENING_SCENE_DURATION_MS = 240;
+export const OPENING_CHOICE_EXIT_DURATION_MS = 96;
+export const OPENING_FORM_ENTRY_DELAY_MS = 72;
+export const OPENING_FORM_ENTRY_DURATION_MS = 168;
+
+export const OPENING_CONTENT_EASE = "easeOut" as const;

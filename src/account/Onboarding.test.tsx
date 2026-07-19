@@ -10,6 +10,7 @@ import {
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import traceFrameUrl from "../../design/trace-frame.svg?url";
 import {
   afterEach,
   beforeAll,
@@ -119,9 +120,10 @@ vi.mock("motion/react", async () => {
       exit,
       transition,
     });
+    const animationKey = JSON.stringify(animate);
     React.useLayoutEffect(() => {
       onAnimationComplete?.();
-    }, []);
+    }, [animationKey]);
     return <div ref={ref} {...props} />;
   });
 
@@ -130,6 +132,20 @@ vi.mock("motion/react", async () => {
     motion: { div: MotionDiv },
     useIsPresent: () => motionHarness.isPresent,
     useReducedMotion: () => motionHarness.reducedMotion,
+  };
+});
+
+vi.mock("@outpacelabs/avatars", async () => {
+  const React = await vi.importActual<typeof import("react")>("react");
+
+  return {
+    GradientAvatar: ({ seed, size }: { seed: string; size: number }) => (
+      React.createElement("span", {
+        "data-testid": "gradient-avatar",
+        "data-seed": seed,
+        style: { width: size, height: size },
+      })
+    ),
   };
 });
 
@@ -211,20 +227,78 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-function latestOpeningMotion() {
+function latestOpeningMotion(className: string) {
   const render = motionHarness.renders.slice().reverse().find(
-    (candidate) => candidate.className === "onboarding-opening-view",
+    (candidate) => candidate.className === className,
   );
   expect(render).toBeDefined();
   return render!;
 }
 
 describe("opening account views", () => {
+  it("uses the canonical brandbook Frame in a decorative inline lockup", async () => {
+    const user = userEvent.setup();
+    render(<Onboarding onContinueLocal={vi.fn()} />);
+    await settleBootstrap();
+
+    const choiceStage = document.querySelector<HTMLElement>(
+      ".onboarding-opening-choice-stage",
+    );
+    const lockup = document.querySelector<HTMLElement>(
+      ".onboarding-opening-lockup",
+    );
+    const mark = lockup?.querySelector<HTMLImageElement>(
+      ".onboarding-opening-lockup__mark",
+    );
+
+    expect(choiceStage).not.toBeNull();
+    expect(lockup).not.toBeNull();
+    expect(choiceStage?.contains(lockup)).toBe(true);
+    expect(document.querySelectorAll(".onboarding-opening-lockup__mark")).toHaveLength(1);
+    expect(mark?.getAttribute("src")).toBe(traceFrameUrl);
+    expect(mark?.getAttribute("alt")).toBe("");
+    expect(mark?.getAttribute("aria-hidden")).toBe("true");
+    expect(mark?.getAttribute("draggable")).toBe("false");
+    expect(mark?.getAttribute("width")).toBe("25");
+    expect(mark?.getAttribute("height")).toBe("25");
+    expect(mark?.hasAttribute("tabindex")).toBe(false);
+    expect(mark?.closest("a, button")).toBeNull();
+    expect(lockup?.textContent).toBe("Trace");
+    expect(screen.queryByRole("img")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Login" }));
+    await screen.findByRole("form", { name: "Sign in to Trace" });
+    expect(document.querySelector(".onboarding-opening-lockup__mark")).toBe(mark);
+    expect(choiceStage?.getAttribute("aria-hidden")).toBe("true");
+    expect(choiceStage?.hasAttribute("inert")).toBe(true);
+
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    expect(await screen.findByRole("button", { name: "Login" })).not.toBeNull();
+    expect(document.querySelector(".onboarding-opening-lockup__mark")).toBe(mark);
+  });
+
   it("keeps one background instance while replacing choices with the login form", async () => {
     const { background, email } = await openLogin();
     expect(screen.getByTestId("opening-background")).toBe(background);
     expect(screen.queryByRole("group", { name: "Account access" })).toBeNull();
     expect(document.activeElement).toBe(email);
+  });
+
+  it("keeps Back mounted but inert and hidden while the choice stage is active", async () => {
+    render(<Onboarding onContinueLocal={vi.fn()} />);
+    await settleBootstrap();
+
+    const scene = document.querySelector<HTMLElement>(".onboarding-opening-scene");
+    const backStage = document.querySelector<HTMLElement>(".onboarding-opening-back-stage");
+    const back = document.querySelector<HTMLButtonElement>(".onboarding-opening-back");
+
+    expect(scene?.style.getPropertyValue("--opening-scene-duration")).toBe("240ms");
+    expect(backStage?.dataset.active).toBe("false");
+    expect(backStage?.getAttribute("aria-hidden")).toBe("true");
+    expect(backStage?.hasAttribute("inert")).toBe(true);
+    expect(back?.disabled).toBe(true);
+    expect(back?.tabIndex).toBe(-1);
+    expect(screen.queryByRole("button", { name: "Back" })).toBeNull();
   });
 
   it("uses labelled native fields, login autocomplete semantics, and a predictable focus order", async () => {
@@ -255,41 +329,60 @@ describe("opening account views", () => {
     );
   });
 
-  it("uses the authored present-view crossfade timing", async () => {
+  it("stages choice exit before the login form and Back control enter", async () => {
     render(<Onboarding onContinueLocal={vi.fn()} />);
     await settleBootstrap();
 
-    expect(latestOpeningMotion()).toMatchObject({
+    await userEvent.setup().click(screen.getByRole("button", { name: "Login" }));
+
+    expect(latestOpeningMotion("onboarding-opening-choice-stage")).toMatchObject({
+      initial: false,
+      animate: { opacity: 0 },
+      transition: { duration: 0.096, ease: "easeOut" },
+    });
+    expect(latestOpeningMotion("onboarding-opening-form-stage")).toMatchObject({
       initial: { opacity: 0 },
       animate: { opacity: 1 },
       exit: { opacity: 0 },
-      transition: { duration: 0.18, ease: "easeOut" },
+      transition: { delay: 0.072, duration: 0.168, ease: "easeOut" },
+    });
+    expect(latestOpeningMotion("onboarding-opening-back-stage")).toMatchObject({
+      initial: false,
+      animate: { opacity: 1 },
+      transition: { delay: 0.072, duration: 0.168, ease: "easeOut" },
     });
   });
 
-  it("makes a non-present opening view inert and hidden during its exit", async () => {
+  it("makes a non-present form stage inert and hidden during its exit", async () => {
     motionHarness.isPresent = false;
     render(<Onboarding onContinueLocal={vi.fn()} />);
     await settleBootstrap();
+    await userEvent.setup().click(screen.getByRole("button", { name: "Login" }));
 
     const openingView = document.querySelector<HTMLElement>(
-      ".onboarding-opening-view",
+      ".onboarding-opening-form-stage",
     );
     expect(openingView?.dataset.present).toBe("false");
     expect(openingView?.getAttribute("aria-hidden")).toBe("true");
     expect(openingView?.hasAttribute("inert")).toBe(true);
-    expect(latestOpeningMotion().transition).toEqual({
-      duration: 0.18,
+    expect(latestOpeningMotion("onboarding-opening-form-stage").transition).toEqual({
+      duration: 0.096,
       ease: "easeOut",
     });
   });
 
-  it("collapses the opening crossfade to 20ms for reduced motion", async () => {
+  it("applies final opening-stage states immediately for reduced motion", async () => {
     motionHarness.reducedMotion = true;
     render(<Onboarding onContinueLocal={vi.fn()} />);
     await settleBootstrap();
+    await userEvent.setup().click(screen.getByRole("button", { name: "Login" }));
 
-    expect(latestOpeningMotion().transition).toEqual({ duration: 0.02 });
+    expect(latestOpeningMotion("onboarding-opening-choice-stage").transition)
+      .toEqual({ duration: 0 });
+    expect(latestOpeningMotion("onboarding-opening-form-stage").transition)
+      .toEqual({ duration: 0 });
+    expect(latestOpeningMotion("onboarding-opening-back-stage").transition)
+      .toEqual({ duration: 0 });
   });
 
   it("forwards mouse coordinates through one shared path across the choice field and both controls", async () => {
@@ -427,7 +520,7 @@ describe("opening account views", () => {
       if (choice === "Login") {
         await screen.findByRole("form", { name: "Sign in to Trace" });
       } else {
-        await screen.findByRole("heading", { name: "What should teammates call you?" });
+        await screen.findByRole("heading", { name: "Set up your profile" });
       }
       arrowHarness.updatePointer.mockClear();
 
@@ -504,8 +597,10 @@ describe("opening account views", () => {
     const background = screen.getByTestId("opening-background");
 
     await user.click(screen.getByRole("button", { name: "Sign up" }));
-    const form = await screen.findByRole("form", { name: "What should teammates call you?" });
-    expect(within(form).getByLabelText("Name")).toBeTruthy();
+    const form = await screen.findByRole("form", { name: "Set up your profile" });
+    expect(within(form).getByLabelText("First name")).toBeTruthy();
+    expect(within(form).getByLabelText("Last name")).toBeTruthy();
+    expect(within(form).getAllByRole("radio", { name: /^Avatar / })).toHaveLength(12);
     expect(within(form).getByRole("button", { name: "Next →" })).toBeTruthy();
     expect(screen.getByTestId("opening-background")).toBe(background);
   });
@@ -523,10 +618,11 @@ describe("opening account views", () => {
 
     await user.click(screen.getByRole("button", { name: "Back" }));
     await user.click(screen.getByRole("button", { name: "Sign up" }));
-    await screen.findByRole("form", { name: "What should teammates call you?" });
+    await screen.findByRole("form", { name: "Set up your profile" });
     expect(background.getAttribute("data-reading-field")).toBe("expanded");
 
-    await user.type(screen.getByLabelText("Name"), "Sameer");
+    await user.type(screen.getByLabelText("First name"), "Sameer");
+    await user.type(screen.getByLabelText("Last name"), "Patel");
     await user.click(screen.getByRole("button", { name: "Next →" }));
     await user.type(screen.getByLabelText("Email"), "sameer@example.com");
     await user.click(screen.getByRole("button", { name: "Next →" }));
@@ -546,7 +642,7 @@ describe("opening account views", () => {
       render(<Onboarding onContinueLocal={vi.fn()} />);
       await settleBootstrap();
       await user.click(screen.getByRole("button", { name: "Sign up" }));
-      await screen.findByRole("heading", { name: "What should teammates call you?" });
+      await screen.findByRole("heading", { name: "Set up your profile" });
       arrowHarness.clearPointer.mockClear();
 
       if (exitMethod === "Back") {
@@ -569,8 +665,9 @@ describe("opening account views", () => {
     const background = screen.getByTestId("opening-background");
 
     await user.click(screen.getByRole("button", { name: "Sign up" }));
-    let form = await screen.findByRole("form", { name: "What should teammates call you?" });
-    await user.type(within(form).getByLabelText("Name"), "  Sameer  ");
+    let form = await screen.findByRole("form", { name: "Set up your profile" });
+    await user.type(within(form).getByLabelText("First name"), "  Sameer  ");
+    await user.type(within(form).getByLabelText("Last name"), "  Patel  ");
     await user.click(within(form).getByRole("button", { name: "Next →" }));
 
     form = await screen.findByRole("form", { name: "Where should we send your link?" });
@@ -582,14 +679,14 @@ describe("opening account views", () => {
     await user.type(within(form).getByLabelText("Confirm password"), "password-for-testing");
     await user.click(within(form).getByRole("button", { name: "Next →" }));
 
-    form = await screen.findByRole("form", { name: "Make Trace yours" });
+    form = await screen.findByRole("form", { name: "Set up your editor" });
     await user.click(within(form).getByRole("radio", { name: /^Dark/ }));
     await user.click(within(form).getByRole("radio", { name: "Violet" }));
     await user.click(within(form).getByRole("button", { name: "Create account →" }));
 
     await waitFor(() => expect(accountApi.signUp).toHaveBeenCalledTimes(1));
     expect(accountApi.signUp).toHaveBeenCalledWith({
-      displayName: "Sameer",
+      displayName: "Sameer Patel",
       email: "sameer@example.com",
       password: "password-for-testing",
     });
@@ -608,8 +705,9 @@ describe("opening account views", () => {
     await settleBootstrap();
 
     await user.click(screen.getByRole("button", { name: "Sign up" }));
-    let form = await screen.findByRole("form", { name: "What should teammates call you?" });
-    await user.type(within(form).getByLabelText("Name"), "Sameer");
+    let form = await screen.findByRole("form", { name: "Set up your profile" });
+    await user.type(within(form).getByLabelText("First name"), "Sameer");
+    await user.type(within(form).getByLabelText("Last name"), "Patel");
     await user.click(within(form).getByRole("button", { name: "Next →" }));
     form = await screen.findByRole("form", { name: "Where should we send your link?" });
     await user.type(within(form).getByLabelText("Email"), "sameer@example.com");
@@ -618,7 +716,7 @@ describe("opening account views", () => {
     await user.type(within(form).getByLabelText("Password"), "password-for-testing");
     await user.type(within(form).getByLabelText("Confirm password"), "password-for-testing");
     await user.click(within(form).getByRole("button", { name: "Next →" }));
-    form = await screen.findByRole("form", { name: "Make Trace yours" });
+    form = await screen.findByRole("form", { name: "Set up your editor" });
     const topBack = screen.getByRole("button", { name: "Back" });
 
     // Keep all events in one React batch: the pending ref must protect the
@@ -631,7 +729,7 @@ describe("opening account views", () => {
     });
 
     await waitFor(() => expect(accountApi.signUp).toHaveBeenCalledTimes(1));
-    expect(screen.getByRole("form", { name: "Make Trace yours" })).toBe(form);
+    expect(screen.getByRole("form", { name: "Set up your editor" })).toBe(form);
     expect((screen.getByRole("button", { name: "Creating account…" }) as HTMLButtonElement).disabled)
       .toBe(true);
     expect((screen.getByRole("button", { name: "← Back" }) as HTMLButtonElement).disabled)
@@ -658,8 +756,9 @@ describe("opening account views", () => {
     await settleBootstrap();
 
     await user.click(screen.getByRole("button", { name: "Sign up" }));
-    let form = await screen.findByRole("form", { name: "What should teammates call you?" });
-    await user.type(within(form).getByLabelText("Name"), "Sameer");
+    let form = await screen.findByRole("form", { name: "Set up your profile" });
+    await user.type(within(form).getByLabelText("First name"), "Sameer");
+    await user.type(within(form).getByLabelText("Last name"), "Patel");
     await user.click(within(form).getByRole("button", { name: "Next →" }));
     form = await screen.findByRole("form", { name: "Where should we send your link?" });
     await user.type(within(form).getByLabelText("Email"), "sameer@example.com");
@@ -668,7 +767,7 @@ describe("opening account views", () => {
     await user.type(within(form).getByLabelText("Password"), "password-for-testing");
     await user.type(within(form).getByLabelText("Confirm password"), "password-for-testing");
     await user.click(within(form).getByRole("button", { name: "Next →" }));
-    form = await screen.findByRole("form", { name: "Make Trace yours" });
+    form = await screen.findByRole("form", { name: "Set up your editor" });
     await user.click(within(form).getByRole("button", { name: "Create account →" }));
 
     expect((await screen.findByRole("alert")).textContent)
@@ -691,17 +790,17 @@ describe("opening account views", () => {
     await user.clear(confirmation);
     await user.type(confirmation, "corrected-password");
     await user.click(within(form).getByRole("button", { name: "Next →" }));
-    form = await screen.findByRole("form", { name: "Make Trace yours" });
+    form = await screen.findByRole("form", { name: "Set up your editor" });
     await user.click(within(form).getByRole("button", { name: "Create account →" }));
 
     await waitFor(() => expect(accountApi.signUp).toHaveBeenCalledTimes(2));
     expect(accountApi.signUp).toHaveBeenNthCalledWith(1, {
-      displayName: "Sameer",
+      displayName: "Sameer Patel",
       email: "sameer@example.com",
       password: "password-for-testing",
     });
     expect(accountApi.signUp).toHaveBeenNthCalledWith(2, {
-      displayName: "Sameer",
+      displayName: "Sameer Patel",
       email: "sameer@example.com",
       password: "corrected-password",
     });
@@ -718,8 +817,10 @@ describe("opening account views", () => {
     await settleBootstrap();
 
     await user.click(screen.getByRole("button", { name: "Sign up" }));
-    let form = await screen.findByRole("form", { name: "What should teammates call you?" });
-    await user.type(within(form).getByLabelText("Name"), "Ada Lovelace");
+    let form = await screen.findByRole("form", { name: "Set up your profile" });
+    await user.type(within(form).getByLabelText("First name"), "Ada");
+    await user.type(within(form).getByLabelText("Last name"), "Lovelace");
+    await user.click(within(form).getByRole("radio", { name: "Avatar 12" }));
     await user.click(within(form).getByRole("button", { name: "Next →" }));
     form = await screen.findByRole("form", { name: "Where should we send your link?" });
     await user.type(within(form).getByLabelText("Email"), "ada@example.com");
@@ -728,7 +829,7 @@ describe("opening account views", () => {
     await user.type(within(form).getByLabelText("Password"), "password-for-testing");
     await user.type(within(form).getByLabelText("Confirm password"), "password-for-testing");
     await user.click(within(form).getByRole("button", { name: "Next →" }));
-    form = await screen.findByRole("form", { name: "Make Trace yours" });
+    form = await screen.findByRole("form", { name: "Set up your editor" });
     await user.click(within(form).getByRole("radio", { name: /^Dark/ }));
     await user.click(within(form).getByRole("radio", { name: "Violet" }));
     await user.click(within(form).getByRole("radio", { name: "Large code" }));
@@ -741,8 +842,11 @@ describe("opening account views", () => {
     expect(screen.queryByRole("alert")).toBeNull();
 
     await user.click(screen.getByRole("button", { name: "Sign up" }));
-    form = await screen.findByRole("form", { name: "What should teammates call you?" });
-    expect((within(form).getByLabelText("Name") as HTMLInputElement).value).toBe("Ada Lovelace");
+    form = await screen.findByRole("form", { name: "Set up your profile" });
+    expect((within(form).getByLabelText("First name") as HTMLInputElement).value).toBe("Ada");
+    expect((within(form).getByLabelText("Last name") as HTMLInputElement).value).toBe("Lovelace");
+    expect((within(form).getByRole("radio", { name: "Avatar 12" }) as HTMLInputElement).checked)
+      .toBe(true);
     await user.click(within(form).getByRole("button", { name: "Next →" }));
     form = await screen.findByRole("form", { name: "Where should we send your link?" });
     expect((within(form).getByLabelText("Email") as HTMLInputElement).value).toBe("ada@example.com");
@@ -757,10 +861,12 @@ describe("opening account views", () => {
     await user.type(password, "new-password-for-ada");
     await user.type(confirmation, "new-password-for-ada");
     await user.click(within(form).getByRole("button", { name: "Next →" }));
-    form = await screen.findByRole("form", { name: "Make Trace yours" });
+    form = await screen.findByRole("form", { name: "Set up your editor" });
     expect((within(form).getByRole("radio", { name: /^Dark/ }) as HTMLInputElement).checked).toBe(true);
     expect((within(form).getByRole("radio", { name: "Violet" }) as HTMLInputElement).checked).toBe(true);
     expect((within(form).getByRole("radio", { name: "Large code" }) as HTMLInputElement).checked).toBe(true);
+    expect(within(form).getByTestId("gradient-avatar").getAttribute("data-seed"))
+      .toBe("trace-avatar:11");
   });
 
   it("supports resend and return to sign in from opening verification", async () => {
@@ -771,8 +877,9 @@ describe("opening account views", () => {
     await settleBootstrap();
 
     await user.click(screen.getByRole("button", { name: "Sign up" }));
-    let form = await screen.findByRole("form", { name: "What should teammates call you?" });
-    await user.type(within(form).getByLabelText("Name"), "Sameer");
+    let form = await screen.findByRole("form", { name: "Set up your profile" });
+    await user.type(within(form).getByLabelText("First name"), "Sameer");
+    await user.type(within(form).getByLabelText("Last name"), "Patel");
     await user.click(within(form).getByRole("button", { name: "Next →" }));
     form = await screen.findByRole("form", { name: "Where should we send your link?" });
     await user.type(within(form).getByLabelText("Email"), "sameer@example.com");
@@ -781,7 +888,7 @@ describe("opening account views", () => {
     await user.type(within(form).getByLabelText("Password"), "password-for-testing");
     await user.type(within(form).getByLabelText("Confirm password"), "password-for-testing");
     await user.click(within(form).getByRole("button", { name: "Next →" }));
-    form = await screen.findByRole("form", { name: "Make Trace yours" });
+    form = await screen.findByRole("form", { name: "Set up your editor" });
     await user.click(within(form).getByRole("button", { name: "Create account →" }));
     await screen.findByRole("heading", { name: "Check your email" });
 
